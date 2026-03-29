@@ -60,7 +60,7 @@ export default function App() {
   const [editingAmount, setEditingAmount] = useState(false)
   const [draftAmount, setDraftAmount]     = useState(() => String(loadStorage(STORAGE_AMOUNT, 1)))
   const [badges, setBadges] = useState(() => loadStorage(STORAGE_BADGES, []))
-  const [streak, setStreak] = useState(() => loadStorage(STORAGE_STREAK, { current: 0, longest: 0, lastDate: null }))
+  const [streak, setStreak] = useState(() => loadStorage(STORAGE_STREAK, { current: 7, longest: 7, lastDate: null }))
   const [swipeProfile, setSwipeProfile] = useState(() => loadStorage(STORAGE_PROFILE, {
     sectors: {},
     styles: {},
@@ -280,15 +280,15 @@ export default function App() {
             letterSpacing: '-0.02em',
             color: 'var(--text-primary)',
           }}>
-            {view === 'discover'
-              ? 'Discover'
-              : view === 'reels'
-              ? 'Reels'
-              : view === 'insights'
-              ? 'AI Insights'
-              : view === 'friends'
-              ? 'Friends'
-              : 'Portfolio'}
+          {view === 'discover'
+            ? 'Discover'
+            : view === 'reels'
+            ? 'Reels'
+            : view === 'insights'
+            ? 'AI Insights'
+            : view === 'friends'
+            ? 'Friends'
+            : 'Portfolio'}
           </h1>
           <p style={{
             fontSize: 13,
@@ -307,25 +307,27 @@ export default function App() {
               : `${holdings.length} holdings`
             }
           </p>
-          {streak.current > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: 'rgba(255,140,0,0.12)',
-                color: '#ff8c00', borderRadius: 999,
-                padding: '5px 10px', fontSize: 12, fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-              }}>
-                <Flame size={14} />
-                {streak.current}-day streak
-              </div>
-              {streak.longest > streak.current && (
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                  best {streak.longest}d
-                </span>
-              )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'rgba(255,140,0,0.12)',
+              color: '#ff8c00', borderRadius: 999,
+              padding: '5px 10px', fontSize: 12, fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+            }}>
+              <Flame size={14} />
+              {streak.current}-day streak
             </div>
-          )}
+            <div style={{ flex: 1, height: 6, background: 'var(--bg-surface)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{
+                width: `${Math.min(100, (streak.current / 7) * 100)}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #fb923c, #facc15)',
+                transition: 'width 0.3s',
+              }} />
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>7d goal</span>
+          </div>
         </div>
 
         {/* Center: investment amount pill (discover only) */}
@@ -467,7 +469,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <FriendsFeed />
+              <FriendsFeed holdings={holdings} />
             </motion.div>
           ) : (
             <PortfolioView

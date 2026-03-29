@@ -1,3 +1,32 @@
+export function stanceFromText(text = '') {
+  const t = text.toLowerCase()
+  const bearWords = ['bubble', 'overvalued', 'short', 'sell', 'risk', 'litigation', 'bear', 'drop', 'down', 'expensive', 'ftc', 'antitrust', 'bankrupt']
+  const bullWords = ['🚀', 'buy', 'bull', 'moat', 'undervalued', 'growth', 're-accel', 'printing', 'up', 'accelerating', 'strong', 'beat']
+  const isBear = bearWords.some((w) => t.includes(w))
+  const isBull = bullWords.some((w) => t.includes(w))
+  return isBear ? 'bear' : isBull ? 'bull' : 'neutral'
+}
+
+function tag(list) {
+  return list.map((c) => ({
+    ...c,
+    stance: stanceFromText(c.text),
+    replies: c.replies ? tag(c.replies) : [],
+  }))
+}
+
+export function getCommentCounts(ticker) {
+  const list = STOCK_COMMENTS[ticker] ?? []
+  let bull = 0, bear = 0
+  const walk = (arr) => arr.forEach((c) => {
+    if (c.stance === 'bull') bull++
+    if (c.stance === 'bear') bear++
+    if (c.replies) walk(c.replies)
+  })
+  walk(list)
+  return { bull, bear, total: list.length }
+}
+
 export const STOCK_COMMENTS = {
   NVDA: [
     {

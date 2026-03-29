@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BadgeCheck, Heart, MessageCircle, Send, ChevronDown, ChevronUp } from 'lucide-react'
-import { STOCK_COMMENTS } from '../data/comments'
+import { STOCK_COMMENTS, stanceFromText } from '../data/comments'
 
 function Avatar({ emoji, bg, size = 32 }) {
   return (
@@ -147,20 +147,13 @@ function CommentRow({ comment, isReply = false, onReply, onLike }) {
   )
 }
 
-function tagWithStance(comment) {
-  const text = (comment.text || '').toLowerCase()
-  const bearWords = ['bubble', 'overvalued', 'short', 'sell', 'risk', 'litigation', 'bear', 'drop', 'down', 'expensive']
-  const bullWords = ['🚀', 'buy', 'bull', 'moat', 'undervalued', 'growth', 're-accel', 'printing']
-  const isBear = bearWords.some((w) => text.includes(w))
-  const isBull = bullWords.some((w) => text.includes(w))
-  return {
-    ...comment,
-    stance: isBear ? 'bear' : isBull ? 'bull' : 'neutral',
-    replies: comment.replies?.map(tagWithStance) ?? [],
-  }
-}
-
 export default function CommentsSection({ ticker }) {
+  const tagWithStance = (comment) => ({
+    ...comment,
+    stance: stanceFromText(comment.text),
+    replies: comment.replies?.map(tagWithStance) ?? [],
+  })
+
   const [comments, setComments] = useState(() => (STOCK_COMMENTS[ticker] ?? []).map(tagWithStance))
   const [newText, setNewText]     = useState('')
   const [replyToId, setReplyToId] = useState(null)
@@ -232,7 +225,7 @@ export default function CommentsSection({ ticker }) {
       likes: 0,
       liked: false,
       replies: [],
-      stance: 'bull',
+      stance: stanceFromText(newText.trim()),
     }
     setComments((prev) => [myComment, ...prev])
     setNewText('')

@@ -4,6 +4,8 @@ import { TrendingUp, TrendingDown, RotateCcw, ArrowUp } from 'lucide-react'
 import MiniChart from './MiniChart'
 import { useStockData, RANGES } from '../hooks/useStockData'
 import { useNewsInsights } from '../hooks/useNewsInsights'
+import { getCommentCounts } from '../data/comments'
+import { getBullBearPoints } from '../data/stockBullets'
 
 function formatHoverTime(unix, rangeKey) {
   if (!unix) return ''
@@ -58,6 +60,10 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
 
   const { price, change, changePct, chartData, timestamps, loading } = useStockData(stock.ticker, selectedRange, stock.price)
   const { articles, loading: newsLoading, error: newsError } = useNewsInsights(stock.ticker, flipped)
+  const { bull: bullComments, bear: bearComments } = getCommentCounts(stock.ticker)
+
+  const bullPoints = getBullBearPoints(stock, 'bull')
+  const bearPoints = getBullBearPoints(stock, 'bear')
 
   // Fall back to static data while loading or on error
   const livePrice     = price     ?? stock.price
@@ -469,8 +475,22 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
               padding: '10px 12px',
               borderLeft: '3px solid var(--accent-green)',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-green)', marginBottom: 4 }}>BULL CASE</div>
-              <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{stock.bull}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-green)' }}>BULL CASE</div>
+                <div style={{
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-tertiary)',
+                  background: 'rgba(0,212,161,0.12)',
+                  borderRadius: 999, padding: '2px 8px',
+                }}>
+                  {bullComments} comments
+                </div>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+                {bullPoints.map((p, i) => (
+                  <li key={i} style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>{p}</li>
+                ))}
+              </ul>
             </div>
             <div style={{
               background: 'var(--accent-red-dim)',
@@ -478,8 +498,22 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
               padding: '10px 12px',
               borderLeft: '3px solid var(--accent-red)',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-red)', marginBottom: 4 }}>BEAR CASE</div>
-              <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{stock.bear}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-red)' }}>BEAR CASE</div>
+                <div style={{
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-tertiary)',
+                  background: 'rgba(255,75,110,0.12)',
+                  borderRadius: 999, padding: '2px 8px',
+                }}>
+                  {bearComments} comments
+                </div>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 6 }}>
+                {bearPoints.map((p, i) => (
+                  <li key={i} style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>{p}</li>
+                ))}
+              </ul>
             </div>
           </div>
 

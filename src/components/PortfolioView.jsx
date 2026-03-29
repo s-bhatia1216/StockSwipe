@@ -11,6 +11,7 @@ function HoldingRow({ holding, index, onAction }) {
   const currentPrice   = livePrice   ?? stock.price
   const dailyChangePct = liveChangePct ?? stock.changePct
   const isUp           = dailyChangePct >= 0
+  const isDiamond      = dailyChangePct <= -20
 
   const shares       = amount / currentPrice
   const currentValue = shares * currentPrice
@@ -166,6 +167,17 @@ function HoldingRow({ holding, index, onAction }) {
               {isUp ? '+' : ''}{dailyChangePct.toFixed(2)}%
             </span>
           </div>
+          {isDiamond && (
+            <div style={{
+              marginTop: 4,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 8px', borderRadius: 999,
+              background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
+              fontSize: 11, fontWeight: 700, color: '#60a5fa',
+            }}>
+              💎 Diamond hands
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>
@@ -202,6 +214,7 @@ export default function PortfolioView({ holdings, badges = [], onHoldingAction }
 
   const totalInvested = holdings.reduce((sum, h) => sum + h.amount, 0)
   const stockCount    = holdings.length
+  const diamondCount  = holdings.filter((h) => (h.stock.changePct ?? 0) <= -20).length
 
   // Sector slices for donut
   const sectorTotals = holdings.reduce((map, h) => {
@@ -256,6 +269,20 @@ export default function PortfolioView({ holdings, badges = [], onHoldingAction }
         }}>
           across {stockCount} {stockCount === 1 ? 'stock' : 'stocks'}
         </div>
+        {diamondCount > 0 && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: 8,
+            padding: '6px 10px',
+            borderRadius: 999,
+            background: 'rgba(59,130,246,0.12)',
+            border: '1px solid rgba(59,130,246,0.25)',
+            color: '#60a5fa',
+            fontSize: 12, fontWeight: 700,
+          }}>
+            💎 {diamondCount} diamond hand{diamondCount > 1 ? 's' : ''}
+          </div>
+        )}
 
         {/* Diversification ring */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 16, flexWrap: 'wrap' }}>

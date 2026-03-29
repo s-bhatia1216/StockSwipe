@@ -265,6 +265,34 @@ export default function InsightsView({ holdings }) {
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
+  const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+
+  const buildMock = (payload) => {
+    const total = payload.holdings.reduce((s, h) => s + h.amount, 0) || 1
+    const sectors = {}
+    payload.holdings.forEach(h => { sectors[h.sector] = (sectors[h.sector] || 0) + h.amount })
+    const top = Object.entries(sectors).sort((a, b) => b[1] - a[1])[0]
+    const concentration = top ? Math.round((top[1] / total) * 100) : 0
+    const grade = concentration <= 35 ? 'A-' : concentration <= 55 ? 'B' : concentration <= 70 ? 'C+' : 'C'
+    const headline = concentration > 60 ? `Heavy in ${top[0]}` : 'Balanced but can be sharper'
+    const summary = concentration > 60
+      ? `Your portfolio is ${concentration}% ${top[0]}. Add a defensive or uncorrelated name to smooth drawdowns.`
+      : 'Good spread across sectors. Layer in one defensive and one growth kicker to tighten risk/reward.'
+    const strengths = [
+      'Clear conviction in top names',
+      concentration < 60 ? 'Reasonable sector mix' : 'High-upside tilt',
+    ]
+    const risks = [
+      concentration > 50 ? `${top[0]} concentration risk` : 'Monitor position sizing on winners',
+      'No explicit hedge for macro shocks',
+      'Cash buffer not modeled in this mock',
+    ]
+    const recs = (payload.availableStocks || []).slice(0, 3).map((s) => ({
+      ticker: s.ticker,
+      reason: `Adds exposure to ${s.sector} to balance current tilt.`,
+    }))
+    return { grade, headline, summary, strengths, risks, recommendations: recs, _offline: true }
+  }
 
   // Sector breakdown computed from holdings
   const totalInvested = holdings.reduce((s, h) => s + h.amount, 0)
@@ -288,33 +316,56 @@ export default function InsightsView({ holdings }) {
 
   useEffect(() => {
     if (holdings.length === 0) return
-    setLoading(true)
-    setAnalysis(null)
-    setError(null)
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setAnalysis(null)
+      setError(null)
 
-    const payload = {
-      holdings: holdings.map(h => ({
-        ticker: h.ticker,
-        name:   h.stock?.name   ?? h.ticker,
-        sector: h.stock?.sector ?? 'Unknown',
-        amount: h.amount,
-      })),
-      availableStocks: available.map(s => ({
-        ticker: s.ticker,
-        name:   s.name,
-        sector: s.sector,
-      })),
+      const payload = {
+        holdings: holdings.map(h => ({
+          ticker: h.ticker,
+          name:   h.stock?.name   ?? h.ticker,
+          sector: h.stock?.sector ?? 'Unknown',
+          amount: h.amount,
+        })),
+        availableStocks: available.map(s => ({
+          ticker: s.ticker,
+          name:   s.name,
+          sector: s.sector,
+        })),
+      }
+
+      const bases = [API_BASE]
+      if (API_BASE === '/api') bases.push('http://localhost:3001/api')
+
+      for (const base of bases) {
+        try {
+          const res = await fetch(`${base}/insights`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = await res.json()
+          if (!cancelled) { setAnalysis(data); setLoading(false) }
+          return
+        } catch (err) {
+          if (base === bases.at(-1)) {
+            // last attempt failed, fall back to local mock
+            if (!cancelled) {
+              setAnalysis(buildMock(payload))
+              setLoading(false)
+              setError(null)
+            }
+          }
+        }
+      }
     }
 
-    fetch('/api/insights', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then(data => { setAnalysis(data); setLoading(false) })
-      .catch(err => { setError(err.message); setLoading(false) })
-  }, [holdingsKey])
+    load()
+    return () => { cancelled = true }
+  }, [holdingsKey, API_BASE, available.length])
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (holdings.length === 0) {
@@ -436,6 +487,20 @@ export default function InsightsView({ holdings }) {
                 Claude Analysis
               </span>
             </div>
+            {analysis._offline && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,215,0,0.12)',
+                color: '#f7b733',
+                padding: '4px 8px',
+                borderRadius: 10,
+                fontSize: 11,
+                fontWeight: 700,
+                marginBottom: 8,
+              }}>
+                Offline mock
+              </div>
+            )}
             <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, marginBottom: 10 }}>
               {analysis.headline}
             </p>

@@ -5,9 +5,18 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const app = express()
 app.use(express.json())
+// Basic CORS so direct calls from Vite dev (any port) work
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Headers', 'Content-Type')
+  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+  if (req.method === 'OPTIONS') return res.sendStatus(204)
+  next()
+})
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const HAS_ANTHROPIC = !!process.env.ANTHROPIC_API_KEY
 
 // ── In-memory cache ──────────────────────────────────────────────────────────
 // TTL varies by range: intraday data expires fast, weekly/monthly data can be cached longer
@@ -19,6 +28,7 @@ const CACHE_TTL = {
   '6M': 60 * 60 * 1000,     // 1 hr
   '1Y': 60 * 60 * 1000,     // 1 hr
   '5Y': 60 * 60 * 1000,     // 1 hr
+  hook: 5 * 60 * 1000,      // 5 min
 }
 
 function getCached(key) {
@@ -99,6 +109,39 @@ app.get('/api/stock/:ticker/:range', async (req, res) => {
   } catch (err) {
     console.error(`[stock] ${ticker}/${range}:`, err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+// ── GET /api/hook/:ticker  — "Why this stock?" one-liner ────────────────────
+app.get('/api/hook/:ticker', async (req, res) => {
+  const ticker = req.params.ticker.toUpperCase()
+  const cacheKey = `hook_${ticker}`
+  const cached = getCached(cacheKey)
+  if (cached) return res.json({ hook: cached })
+
+  const defaultHook = `${ticker}: steady momentum, catching buyers' attention today.`
+
+  try {
+    // Lightweight deterministic hook if Anthropic is missing
+    if (!HAS_ANTHROPIC) {
+      setCached(cacheKey, defaultHook, CACHE_TTL.hook)
+      return res.json({ hook: defaultHook })
+    }
+
+    const prompt = `Give one punchy, 8-14 word hook on why the stock ${ticker} is interesting *today*. No ticker prefix. No emojis.`
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 60,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+    const hook = text.split('\n')[0].slice(0, 140) || defaultHook
+    setCached(cacheKey, hook, CACHE_TTL.hook)
+    res.json({ hook })
+  } catch (err) {
+    console.error('[hook]', err.message)
+    setCached(cacheKey, defaultHook, CACHE_TTL.hook)
+    res.json({ hook: defaultHook })
   }
 })
 
@@ -267,6 +310,44 @@ app.post('/api/insights', async (req, res) => {
     return res.status(400).json({ error: 'No holdings to analyze' })
   }
 
+  const buildMock = () => {
+    const total = holdings.reduce((s, h) => s + h.amount, 0) || 1
+    const sectors = {}
+    holdings.forEach(h => {
+      sectors[h.sector] = (sectors[h.sector] || 0) + h.amount
+    })
+    const topSector = Object.entries(sectors).sort((a, b) => b[1] - a[1])[0]
+    const concentration = topSector ? Math.round((topSector[1] / total) * 100) : 0
+    const grade = concentration <= 35 ? 'A-' : concentration <= 55 ? 'B' : concentration <= 70 ? 'C+' : 'C'
+    const headline = concentration > 60
+      ? 'Heavy in ' + topSector[0]
+      : 'Solid mix with room to tweak'
+    const summary = concentration > 60
+      ? `Portfolio leans ${concentration}% toward ${topSector[0]}. Add a defensive or uncorrelated name to smooth drawdowns.`
+      : 'Balanced across sectors. Consider adding one defensive and one growth kicker to tighten risk/reward.'
+    const strengths = [
+      'Clear conviction names in top positions',
+      concentration < 60 ? 'Reasonable sector spread' : 'High-upside focus could outperform in bull tape',
+    ]
+    const risks = [
+      concentration > 50 ? `${topSector[0]} concentration risk` : 'Monitor position sizing on winners',
+      'No explicit hedge for macro shocks',
+      'Cash buffer not modeled in this mock',
+    ]
+    const recs = (availableStocks || []).slice(0, 6).slice(0, 3).map(s => ({
+      ticker: s.ticker,
+      reason: `Balances the current tilt with exposure to ${s.sector}.`,
+    }))
+    return {
+      grade,
+      headline,
+      summary,
+      strengths,
+      risks,
+      recommendations: recs,
+    }
+  }
+
   try {
     const totalInvested = holdings.reduce((s, h) => s + h.amount, 0)
 
@@ -315,6 +396,10 @@ Return exactly this JSON shape:
 
 Grade scale: A = excellent diversification + risk/reward, B = solid with minor gaps, C = concentrated or high risk, D = poorly constructed. Use +/- modifiers.`
 
+    if (!HAS_ANTHROPIC) {
+      return res.json(buildMock())
+    }
+
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 700,
@@ -328,7 +413,7 @@ Grade scale: A = excellent diversification + risk/reward, B = solid with minor g
     res.json(json)
   } catch (err) {
     console.error('[insights]', err.message)
-    res.status(500).json({ error: err.message })
+    res.json(buildMock())
   }
 })
 

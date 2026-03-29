@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
 const cache = {}
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 export function useStockHook(ticker) {
   const [hook, setHook]       = useState(cache[ticker] ?? null)
@@ -13,16 +14,38 @@ export function useStockHook(ticker) {
     let cancelled = false
     setLoading(true)
 
-    fetch(`/api/hook/${ticker}`)
-      .then(r => r.json())
-      .then(d => {
-        if (cancelled) return
-        const text = d.hook ?? null
-        cache[ticker] = text
-        setHook(text)
+    async function load() {
+      // Try direct backend first, then Vite proxy as fallback
+      const bases = [API_BASE]
+      if (API_BASE !== '/api') bases.push('/api')
+
+      for (const base of bases) {
+        try {
+          const res = await fetch(`${base}/hook/${ticker}`)
+          if (res.status === 404) {
+            // try next base if available
+            continue
+          }
+          if (!res.ok) throw new Error(`status ${res.status}`)
+          const d = await res.json()
+          if (cancelled) return
+          const text = d.hook ?? null
+          cache[ticker] = text
+          setHook(text)
+          setLoading(false)
+          return
+        } catch (e) {
+          // try next base
+        }
+      }
+      if (!cancelled) {
+        cache[ticker] = null
+        setHook(null)
         setLoading(false)
-      })
-      .catch(() => { if (!cancelled) setLoading(false) })
+      }
+    }
+
+    load()
 
     return () => { cancelled = true }
   }, [ticker])
