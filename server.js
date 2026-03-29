@@ -213,21 +213,27 @@ app.get('/api/hook/:ticker', async (req, res) => {
   const cached = hookCache.get(ticker)
   if (cached && Date.now() < cached.expiresAt) return res.json({ hook: cached.hook })
 
+  // Try to grab live quote for richer context — non-blocking
+  let priceContext = ''
+  let name = ticker
   try {
-    // Grab live quote for context
     const quote = await yf.quote(ticker)
     const price     = quote.regularMarketPrice?.toFixed(2) ?? '?'
     const changePct = quote.regularMarketChangePercent?.toFixed(2) ?? '0'
     const direction = parseFloat(changePct) >= 0 ? 'up' : 'down'
-    const name      = quote.longName ?? quote.shortName ?? ticker
+    name = quote.longName ?? quote.shortName ?? ticker
+    priceContext = `Price: $${price}, ${direction} ${Math.abs(parseFloat(changePct))}% today.`
+  } catch {
+    // proceed without price data
+  }
 
+  try {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 60,
       messages: [{
         role: 'user',
-        content: `Write one punchy, specific, present-tense investment hook for ${ticker} (${name}).
-Price: $${price}, ${direction} ${Math.abs(parseFloat(changePct))}% today.
+        content: `Write one punchy, specific, present-tense investment hook for ${ticker} (${name}). ${priceContext}
 Rules: max 10 words, no quotes, no trailing punctuation, specific not generic, investor-focused.
 Examples: "Blackwell demand outpacing supply by 3:1 this quarter" / "Analysts lifted price targets five times this month"
 Return ONLY the hook text, nothing else.`,
@@ -242,7 +248,10 @@ Return ONLY the hook text, nothing else.`,
     res.json({ hook })
   } catch (err) {
     console.error(`[hook] ${ticker}:`, err.message)
-    res.status(500).json({ error: err.message })
+    // Return a fallback instead of 500 so the UI still shows something
+    const fallback = `${ticker} is on traders' radar today`
+    hookCache.set(ticker, { hook: fallback, expiresAt: Date.now() + 2 * 60 * 1000 })
+    res.json({ hook: fallback })
   }
 })
 
