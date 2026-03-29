@@ -1,12 +1,13 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X, Check } from 'lucide-react'
 import StockCard from './StockCard'
 import { useStockData } from '../hooks/useStockData'
 
 export default function StockDetailModal({ stock, holding, initialMode = 'buy', onClose, onBuyMore, onSell }) {
-  const [mode, setMode] = useState(initialMode)
-  const [amount, setAmount] = useState('')
+  const [mode, setMode]           = useState(initialMode)
+  const [amount, setAmount]       = useState('')
+  const [confirmed, setConfirmed] = useState(null) // { mode, shares, amount }
 
   const { price: livePrice } = useStockData(stock.ticker, '1D', stock.price)
   const currentPrice = livePrice ?? stock.price
@@ -18,12 +19,21 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
   const amountNum = parseFloat(amount) || 0
   const isValidAmount = amountNum > 0 && (mode === 'buy' || amountNum <= holding.amount)
 
+  const sharesTransacted = amountNum / currentPrice
+
   const handleConfirm = () => {
     if (!isValidAmount) return
     if (mode === 'buy') onBuyMore(stock.ticker, amountNum)
     else onSell(stock.ticker, amountNum)
-    onClose()
+    setConfirmed({ mode, shares: sharesTransacted, amount: amountNum })
   }
+
+  // Auto-close after showing confirmation
+  useEffect(() => {
+    if (!confirmed) return
+    const t = setTimeout(onClose, 2000)
+    return () => clearTimeout(t)
+  }, [confirmed])
 
   const actionColor = mode === 'buy' ? 'var(--accent-green)' : 'var(--accent-red)'
 
@@ -118,7 +128,51 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
           borderTop: '1px solid var(--border)',
           padding: '12px 20px 28px',
           flexShrink: 0,
+          position: 'relative',
         }}>
+          {/* Trade confirmation overlay */}
+          <AnimatePresence>
+            {confirmed && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  background: 'var(--bg-card)',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: 10, zIndex: 10,
+                  borderRadius: 0,
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 22, delay: 0.05 }}
+                  style={{
+                    width: 58, height: 58, borderRadius: '50%',
+                    background: confirmed.mode === 'buy' ? 'var(--accent-green-dim)' : 'var(--accent-red-dim)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: 4,
+                  }}
+                >
+                  <Check size={28} color={confirmed.mode === 'buy' ? 'var(--accent-green)' : 'var(--accent-red)'} strokeWidth={3} />
+                </motion.div>
+                <p style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                  {confirmed.mode === 'buy' ? `Invested $${confirmed.amount.toFixed(2)}` : `Sold $${confirmed.amount.toFixed(2)}`}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', margin: 0 }}>
+                  {confirmed.shares < 0.01
+                    ? confirmed.shares.toFixed(6)
+                    : confirmed.shares < 1
+                    ? confirmed.shares.toFixed(4)
+                    : confirmed.shares.toFixed(2)} shares of {stock.ticker}
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {/* Buy / Sell toggle — hide sell when no position */}
           <div style={{
             display: 'flex', gap: 4, marginBottom: 14,

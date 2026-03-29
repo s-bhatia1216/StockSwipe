@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, ChevronDown, MessageCircle } from 'lucide-react'
+import { Check, ChevronDown, MessageCircle, Sparkles } from 'lucide-react'
 import StockCard from './StockCard'
 import CommentsSection from './CommentsSection'
 import { playBuySound, playSkipSound } from '../utils/sounds'
 import { STOCK_COMMENTS } from '../data/comments'
+import { useStockHook } from '../hooks/useStockHook'
 
 export default function SwipeView({ stocks, onSwipeRight, onSwipeLeft, portfolioCount, investAmount = 1 }) {
   const [exitDirection, setExitDirection] = useState(0)
@@ -18,6 +19,8 @@ export default function SwipeView({ stocks, onSwipeRight, onSwipeLeft, portfolio
 
   const topStock  = stocks[0]
   const nextStock = stocks[1]
+
+  const { hook, loading: hookLoading } = useStockHook(topStock?.ticker)
 
   // ── Floating comment bubbles ──────────────────────────────────────────────
   useEffect(() => {
@@ -111,7 +114,45 @@ export default function SwipeView({ stocks, onSwipeRight, onSwipeLeft, portfolio
         padding: '0 20px',
       }}
     >
-      {/* ── Card stack (full height) ───────────────────────────────────── */}
+      {/* ── "Why this stock?" hook ────────────────────────────────────── */}
+      <div style={{ height: 36, display: 'flex', alignItems: 'center', paddingBottom: 4 }}>
+        <AnimatePresence mode="wait">
+          {hook && !hookLoading && (
+            <motion.div
+              key={topStock?.ticker}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.35 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <Sparkles size={12} color="var(--accent-purple)" />
+              <span style={{
+                fontSize: 12.5, color: 'var(--text-secondary)',
+                fontStyle: 'italic', lineHeight: 1.3,
+              }}>
+                {hook}
+              </span>
+            </motion.div>
+          )}
+          {hookLoading && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.3, 0.6, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              style={{
+                height: 12, width: 180, borderRadius: 6,
+                background: 'var(--bg-surface)',
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Card stack ────────────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative' }}>
 
         {/* Flash overlay */}

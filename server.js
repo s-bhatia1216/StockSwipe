@@ -189,6 +189,47 @@ app.get('/api/news-insights/:ticker', async (req, res) => {
   }
 })
 
+// ── GET /api/hook/:ticker ────────────────────────────────────────────────────
+const hookCache = new Map()
+
+app.get('/api/hook/:ticker', async (req, res) => {
+  const ticker = req.params.ticker.toUpperCase()
+  const cached = hookCache.get(ticker)
+  if (cached && Date.now() < cached.expiresAt) return res.json({ hook: cached.hook })
+
+  try {
+    // Grab live quote for context
+    const quote = await yf.quote(ticker)
+    const price     = quote.regularMarketPrice?.toFixed(2) ?? '?'
+    const changePct = quote.regularMarketChangePercent?.toFixed(2) ?? '0'
+    const direction = parseFloat(changePct) >= 0 ? 'up' : 'down'
+    const name      = quote.longName ?? quote.shortName ?? ticker
+
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 60,
+      messages: [{
+        role: 'user',
+        content: `Write one punchy, specific, present-tense investment hook for ${ticker} (${name}).
+Price: $${price}, ${direction} ${Math.abs(parseFloat(changePct))}% today.
+Rules: max 10 words, no quotes, no trailing punctuation, specific not generic, investor-focused.
+Examples: "Blackwell demand outpacing supply by 3:1 this quarter" / "Analysts lifted price targets five times this month"
+Return ONLY the hook text, nothing else.`,
+      }],
+    })
+
+    const hook = message.content[0].type === 'text'
+      ? message.content[0].text.trim().replace(/^["']|["']$/g, '')
+      : `${ticker} is moving — here's why`
+
+    hookCache.set(ticker, { hook, expiresAt: Date.now() + 20 * 60 * 1000 })
+    res.json({ hook })
+  } catch (err) {
+    console.error(`[hook] ${ticker}:`, err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── POST /api/insights ───────────────────────────────────────────────────────
 app.post('/api/insights', async (req, res) => {
   const { holdings = [], availableStocks = [] } = req.body
