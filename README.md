@@ -19,21 +19,21 @@ npm run dev
 | Key | Where |
 |-----|-------|
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
-| `FINNHUB_API_KEY` | [finnhub.io](https://finnhub.io) — free tier |
-| `YOUTUBE_API_KEY` | [console.cloud.google.com](https://console.cloud.google.com) — YouTube Data API v3 |
+| `FINNHUB_API_KEY` | [finnhub.io](https://finnhub.io) - free tier |
+| `YOUTUBE_API_KEY` | [console.cloud.google.com](https://console.cloud.google.com) - YouTube Data API v3 |
 
 ## Features
 
 ### Discover
-- Swipe left/right with physics-based drag gestures — BUY/SKIP indicators appear during drag
-- 3D card flip — front shows live price + interactive chart (6 timeframes), back shows AI analysis + live news
+- Swipe left/right with physics-based drag gestures - BUY/SKIP indicators appear during drag
+- 3D card flip - front shows live price + interactive chart (6 timeframes), back shows AI analysis + live news
 - Real-time prices and charts via Yahoo Finance (`yahoo-finance2`), correct % change per range
-- 2×2 live news widget grid on card back — real article cover images scraped from og:image tags
-- "Why this stock?" hook — Claude Haiku generates a ≤10-word punchy insight above each card (cached)
-- Ask Claude bar — iOS-style input on card back, ask any question, Claude Haiku answers in a purple bubble
+- 2×2 live news widget grid on card back - real article cover images scraped from og:image tags
+- "Why this stock?" hook - Claude Haiku generates a ≤10-word punchy insight above each card (cached)
+- Ask Claude bar - iOS-style input on card back, ask any question, Claude Haiku answers in a purple bubble
 - Community comments bottom sheet with threaded replies, likes, verified analyst badges
 - Floating comment bubbles drift up from the card during swiping
-- Sector picker onboarding — filter the deck to your interests
+- Sector picker onboarding - filter the deck to your interests
 
 ### Reels
 - TikTok-style vertical shorts for each stock
@@ -43,7 +43,7 @@ npm run dev
 - Live P&L on all holdings with share count and daily change
 - Swipe a holding right → Buy More, left → Sell
 - Full buy/sell modal with share math and MAX button
-- Trade confirmation animation — spring-animated checkmark + amount + share count, auto-closes
+- Trade confirmation animation - spring-animated checkmark + amount + share count, auto-closes
 - Colored sector allocation bar
 - All state persists across refresh (localStorage)
 
@@ -81,23 +81,23 @@ npm run dev
 | Market data | yahoo-finance2 |
 | News | Finnhub API |
 | Video | YouTube Data API v3 |
-| AI | Anthropic SDK — Claude Haiku 4.5 + Sonnet 4.6 |
+| AI | Anthropic SDK - Claude Haiku 4.5 + Sonnet 4.6 |
 
 ## Project structure
 
 ```
 server.js                   # Express backend
-  GET  /api/stock/:ticker/:range   — live price + chart (yahoo-finance2, cached)
-  GET  /api/news-insights/:ticker  — real news articles with og:image scraping
-  GET  /api/hook/:ticker           — Claude Haiku "why this stock?" hook (20-min cache)
-  POST /api/ask                    — Claude Haiku answers user questions about a stock
-  POST /api/insights               — Claude Sonnet portfolio analysis (grade, risks, recommendations)
+  GET  /api/stock/:ticker/:range   - live price + chart (yahoo-finance2, cached)
+  GET  /api/news-insights/:ticker  - real news articles with og:image scraping
+  GET  /api/hook/:ticker           - Claude Haiku "why this stock?" hook (20-min cache)
+  POST /api/ask                    - Claude Haiku answers user questions about a stock
+  POST /api/insights               - Claude Sonnet portfolio analysis (grade, risks, recommendations)
 
 src/
   App.jsx                     # Main app, nav, global state + localStorage persistence
   components/
     SwipeView.jsx             # Card stack + swipe gestures + comments sheet
-    StockCard.jsx             # Flippable card — front (price/chart) + back (analysis/news)
+    StockCard.jsx             # Flippable card - front (price/chart) + back (analysis/news)
     MiniChart.jsx             # Canvas sparkline with hover crosshair
     PortfolioView.jsx         # Holdings list with swipe-to-act
     StockDetailModal.jsx      # Buy/sell modal with trade confirmation animation (opens from portfolio + reels)
