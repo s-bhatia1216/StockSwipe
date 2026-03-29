@@ -3,35 +3,37 @@ import { AnimatePresence } from 'framer-motion'
 import SwipeView from './components/SwipeView'
 import PortfolioView from './components/PortfolioView'
 import StockDetailModal from './components/StockDetailModal'
-import SectorPicker, { resolveSectors } from './components/SectorPicker'
+import SectorPicker from './components/SectorPicker'
 import { Compass, Briefcase, Sparkles } from 'lucide-react'
 import { STOCKS } from './data/stocks'
 
-const STORAGE_KEY = 'stockswipe_sectors'
+const STORAGE_SECTORS   = 'stockswipe_sectors'
+const STORAGE_PORTFOLIO = 'stockswipe_portfolio'
+const STORAGE_SKIPPED   = 'stockswipe_skipped'
+const STORAGE_AMOUNT    = 'stockswipe_amount'
 
-function loadSavedSectors() {
+function loadStorage(key, fallback) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw)
+    const raw = localStorage.getItem(key)
+    if (raw !== null) return JSON.parse(raw)
   } catch {}
-  return null
+  return fallback
 }
 
 export default function App() {
   const [view, setView]           = useState('discover')
-  const [portfolio, setPortfolio] = useState([])
-  const [skipped, setSkipped]     = useState([])
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [investAmount, setInvestAmount] = useState(1)
+  const [portfolio, setPortfolio] = useState(() => loadStorage(STORAGE_PORTFOLIO, []))
+  const [skipped, setSkipped]     = useState(() => loadStorage(STORAGE_SKIPPED, []))
+  const [investAmount, setInvestAmount] = useState(() => loadStorage(STORAGE_AMOUNT, 1))
   const [editingAmount, setEditingAmount] = useState(false)
-  const [draftAmount, setDraftAmount]     = useState('1')
+  const [draftAmount, setDraftAmount]     = useState(() => String(loadStorage(STORAGE_AMOUNT, 1)))
 
   // Sector onboarding — null means not yet confirmed
-  const [selectedSectors, setSelectedSectors] = useState(() => loadSavedSectors())
+  const [selectedSectors, setSelectedSectors] = useState(() => loadStorage(STORAGE_SECTORS, null))
 
   const handleSectorConfirm = (resolvedSectors) => {
     setSelectedSectors(resolvedSectors)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(resolvedSectors))
+    localStorage.setItem(STORAGE_SECTORS, JSON.stringify(resolvedSectors))
   }
 
   // Filter stock pool by selected sectors (null = show all during onboarding)
@@ -45,19 +47,26 @@ export default function App() {
   )
 
   const handleSwipeRight = (ticker) => {
-    setPortfolio((prev) => [...prev, { ticker, amount: investAmount }])
-    setCurrentIndex((i) => i + 1)
+    setPortfolio((prev) => {
+      const next = [...prev, { ticker, amount: investAmount }]
+      localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
+      return next
+    })
   }
 
   const handleSwipeLeft = (ticker) => {
-    setSkipped((prev) => [...prev, ticker])
-    setCurrentIndex((i) => i + 1)
+    setSkipped((prev) => {
+      const next = [...prev, ticker]
+      localStorage.setItem(STORAGE_SKIPPED, JSON.stringify(next))
+      return next
+    })
   }
 
   const handleReset = () => {
     setPortfolio([])
     setSkipped([])
-    setCurrentIndex(0)
+    localStorage.removeItem(STORAGE_PORTFOLIO)
+    localStorage.removeItem(STORAGE_SKIPPED)
   }
 
   // Portfolio detail modal
@@ -68,17 +77,21 @@ export default function App() {
   }
 
   const handleBuyMore = (ticker, amount) => {
-    setPortfolio((prev) =>
-      prev.map((h) => h.ticker === ticker ? { ...h, amount: h.amount + amount } : h)
-    )
+    setPortfolio((prev) => {
+      const next = prev.map((h) => h.ticker === ticker ? { ...h, amount: h.amount + amount } : h)
+      localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
+      return next
+    })
   }
 
   const handleSell = (ticker, amount) => {
-    setPortfolio((prev) =>
-      prev
+    setPortfolio((prev) => {
+      const next = prev
         .map((h) => h.ticker === ticker ? { ...h, amount: h.amount - amount } : h)
         .filter((h) => h.amount > 0)
-    )
+      localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
+      return next
+    })
   }
 
   const holdings = portfolio.map((h) => ({
@@ -145,6 +158,7 @@ export default function App() {
                 setInvestAmount(val)
                 setDraftAmount(String(val))
                 setEditingAmount(false)
+                localStorage.setItem(STORAGE_AMOUNT, JSON.stringify(val))
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') e.target.blur()
