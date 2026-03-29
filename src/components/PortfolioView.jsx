@@ -1,99 +1,178 @@
-import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, DollarSign } from 'lucide-react'
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
+import { TrendingUp, TrendingDown, DollarSign, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useStockData } from '../hooks/useStockData'
 
-// Live price row — fetches current price independently
-function HoldingRow({ holding, index }) {
+const SWIPE_THRESHOLD = 72
+
+function HoldingRow({ holding, index, onAction }) {
   const { stock, amount } = holding
   const { price: livePrice, changePct: liveChangePct } = useStockData(stock.ticker, '1D', stock.price)
 
-  const currentPrice  = livePrice   ?? stock.price
+  const currentPrice   = livePrice   ?? stock.price
   const dailyChangePct = liveChangePct ?? stock.changePct
   const isUp           = dailyChangePct >= 0
 
-  // Fractional shares owned = dollars invested ÷ current price
   const shares       = amount / currentPrice
-  const currentValue = shares * currentPrice  // = amount (by definition at purchase time)
+  const currentValue = shares * currentPrice
+
+  const x = useMotionValue(0)
+  // Green buy label opacity on right swipe
+  const buyLabelOpacity  = useTransform(x, [0, 36, SWIPE_THRESHOLD], [0, 0.6, 1])
+  const buyBgOpacity     = useTransform(x, [0, SWIPE_THRESHOLD], [0, 0.18])
+  // Red sell label opacity on left swipe
+  const sellLabelOpacity = useTransform(x, [-SWIPE_THRESHOLD, -36, 0], [1, 0.6, 0])
+  const sellBgOpacity    = useTransform(x, [-SWIPE_THRESHOLD, 0], [0.18, 0])
+
+  const handleDragEnd = async (_, info) => {
+    if (info.offset.x > SWIPE_THRESHOLD) {
+      await animate(x, 0, { type: 'spring', stiffness: 400, damping: 28 })
+      onAction(holding.ticker, 'buy')
+    } else if (info.offset.x < -SWIPE_THRESHOLD) {
+      await animate(x, 0, { type: 'spring', stiffness: 400, damping: 28 })
+      onAction(holding.ticker, 'sell')
+    } else {
+      animate(x, 0, { type: 'spring', stiffness: 400, damping: 28 })
+    }
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      style={{
-        background: 'var(--bg-card)',
-        borderRadius: 'var(--radius-md)',
-        border: '1px solid var(--border)',
-        padding: '14px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-      }}
+      style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}
     >
-      {/* Logo */}
-      <div style={{
-        width: 40, height: 40, borderRadius: 10,
-        background: stock.color,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 12, fontWeight: 700, color: '#fff',
-        fontFamily: 'var(--font-mono)', flexShrink: 0,
+      {/* BUY MORE reveal — left side */}
+      <motion.div style={{
+        position: 'absolute', inset: 0,
+        background: 'var(--accent-green)',
+        opacity: buyBgOpacity,
+        borderRadius: 'var(--radius-md)',
+        pointerEvents: 'none',
+      }} />
+      <motion.div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center',
+        paddingLeft: 18, gap: 6,
+        opacity: buyLabelOpacity,
+        pointerEvents: 'none',
       }}>
-        {stock.logo}
-      </div>
-
-      {/* Name + shares */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
-          {stock.name}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {stock.ticker}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--border)' }}>·</span>
-          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            {shares < 0.01
-              ? shares.toFixed(6)
-              : shares < 1
-              ? shares.toFixed(4)
-              : shares.toFixed(2)} sh
-          </span>
-        </div>
-      </div>
-
-      {/* Right: invested + daily change */}
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{
-          fontSize: 15, fontWeight: 600,
+        <ChevronsRight size={14} color="var(--accent-green)" />
+        <span style={{
+          fontSize: 12, fontWeight: 700,
           fontFamily: 'var(--font-mono)',
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.01em',
-        }}>
-          ${currentValue.toFixed(2)}
-        </div>
+          color: 'var(--accent-green)',
+          letterSpacing: '0.06em',
+        }}>BUY MORE</span>
+      </motion.div>
+
+      {/* SELL reveal — right side */}
+      <motion.div style={{
+        position: 'absolute', inset: 0,
+        background: 'var(--accent-red)',
+        opacity: sellBgOpacity,
+        borderRadius: 'var(--radius-md)',
+        pointerEvents: 'none',
+      }} />
+      <motion.div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        paddingRight: 18, gap: 6,
+        opacity: sellLabelOpacity,
+        pointerEvents: 'none',
+      }}>
+        <span style={{
+          fontSize: 12, fontWeight: 700,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--accent-red)',
+          letterSpacing: '0.06em',
+        }}>SELL</span>
+        <ChevronsLeft size={14} color="var(--accent-red)" />
+      </motion.div>
+
+      {/* Draggable row */}
+      <motion.div
+        style={{
+          x,
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border)',
+          padding: '14px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          cursor: 'grab',
+          position: 'relative',
+          zIndex: 1,
+        }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.35}
+        onDragEnd={handleDragEnd}
+        whileTap={{ cursor: 'grabbing' }}
+      >
+        {/* Logo */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-          gap: 4, marginTop: 3,
+          width: 40, height: 40, borderRadius: 10,
+          background: stock.color,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 12, fontWeight: 700, color: '#fff',
+          fontFamily: 'var(--font-mono)', flexShrink: 0,
         }}>
-          <span style={{
-            fontSize: 11, fontFamily: 'var(--font-mono)',
-            color: 'var(--text-tertiary)',
-          }}>
-            ${amount.toFixed(2)} in
-          </span>
-          <span style={{
-            fontSize: 11, fontFamily: 'var(--font-mono)',
-            color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
-          }}>
-            {isUp ? '+' : ''}{dailyChangePct.toFixed(2)}%
-          </span>
+          {stock.logo}
         </div>
-      </div>
+
+        {/* Name + shares */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+            {stock.name}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              {stock.ticker}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--border)' }}>·</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              {shares < 0.01
+                ? shares.toFixed(6)
+                : shares < 1
+                ? shares.toFixed(4)
+                : shares.toFixed(2)} sh
+            </span>
+          </div>
+        </div>
+
+        {/* Right: value + daily change */}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{
+            fontSize: 15, fontWeight: 600,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.01em',
+          }}>
+            ${currentValue.toFixed(2)}
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+            gap: 4, marginTop: 3,
+          }}>
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>
+              ${amount.toFixed(2)} in
+            </span>
+            <span style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
+            }}>
+              {isUp ? '+' : ''}{dailyChangePct.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }
 
-export default function PortfolioView({ holdings }) {
+export default function PortfolioView({ holdings, onHoldingAction }) {
   if (!holdings || holdings.length === 0) {
     return (
       <motion.div
@@ -167,12 +246,7 @@ export default function PortfolioView({ holdings }) {
             <div
               key={h.ticker}
               title={`${h.stock.ticker}: $${h.amount.toFixed(2)}`}
-              style={{
-                flex: h.amount,
-                height: 5,
-                background: h.stock.color,
-                opacity: 0.8,
-              }}
+              style={{ flex: h.amount, height: 5, background: h.stock.color, opacity: 0.8 }}
             />
           ))}
         </div>
@@ -188,10 +262,22 @@ export default function PortfolioView({ holdings }) {
         </div>
       </div>
 
+      {/* Swipe hint */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 8, marginBottom: 10,
+      }}>
+        <ChevronsRight size={12} color="var(--accent-green)" />
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+          swipe right to buy more · left to sell
+        </span>
+        <ChevronsLeft size={12} color="var(--accent-red)" />
+      </div>
+
       {/* Holdings list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 20 }}>
         {holdings.map((h, i) => (
-          <HoldingRow key={h.ticker} holding={h} index={i} />
+          <HoldingRow key={h.ticker} holding={h} index={i} onAction={onHoldingAction} />
         ))}
       </div>
     </motion.div>

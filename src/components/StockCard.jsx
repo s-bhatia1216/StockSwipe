@@ -20,7 +20,7 @@ function formatHoverTime(unix, rangeKey) {
   return d.toLocaleDateString([], { month: 'short', year: 'numeric' })
 }
 
-export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDown, isTop, exitDirection }) {
+export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDown, isTop, exitDirection, detailMode = false }) {
   const [flipped, setFlipped] = useState(false)
   const [selectedRange, setSelectedRange] = useState('1D')
   const [hoverInfo, setHoverInfo] = useState(null) // { price, timestamp } | null
@@ -66,29 +66,29 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
         position: 'absolute',
         width: '100%',
         height: '100%',
-        x,
-        rotate,
-        scale,
-        cursor: isTop ? 'grab' : 'default',
+        x: detailMode ? 0 : x,
+        rotate: detailMode ? 0 : rotate,
+        scale: detailMode ? 1 : scale,
+        cursor: (isTop && !detailMode) ? 'grab' : 'default',
         perspective: 1000,
         zIndex: isTop ? 10 : 1,
       }}
-      drag={isTop ? true : false}
+      drag={isTop && !detailMode ? true : false}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
       dragElastic={0.9}
       onDragEnd={handleDragEnd}
-      initial={{ scale: 0.92, opacity: 0, y: 30 }}
+      initial={detailMode ? false : { scale: 0.92, opacity: 0, y: 30 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
-      exit={{
+      exit={detailMode ? {} : {
         x: exitDirection * 520,
         opacity: 0,
         transition: { duration: 0.32, ease: [0.32, 0, 0.67, 0] },
       }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-      whileTap={{ cursor: 'grabbing' }}
+      whileTap={!detailMode ? { cursor: 'grabbing' } : {}}
     >
       {/* Swipe indicators */}
-      {isTop && (
+      {isTop && !detailMode && (
         <>
           <motion.div style={{
             position: 'absolute',
@@ -129,7 +129,7 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
 
       {/* Card container with 3D flip */}
       <div
-        onClick={() => isTop && setFlipped(!flipped)}
+        onClick={() => (isTop || detailMode) && setFlipped(!flipped)}
         style={{
           width: '100%',
           height: '100%',
@@ -149,7 +149,7 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
           background: 'var(--bg-card)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)',
-          padding: 24,
+          padding: detailMode ? '16px 20px 16px' : 24,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -166,59 +166,61 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
             opacity: 0.7,
           }} />
 
-          {/* Ticker + name */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 8 }}>
-            <div>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'var(--bg-surface)',
-                padding: '5px 12px',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: 12,
-              }}>
+          {/* Ticker + name — hidden in detailMode (already shown in modal header) */}
+          {!detailMode && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 8 }}>
+              <div>
                 <div style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
-                  background: stock.color,
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: '#fff',
-                  fontFamily: 'var(--font-mono)',
+                  gap: 8,
+                  background: 'var(--bg-surface)',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: 12,
                 }}>
-                  {stock.logo}
+                  <div style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    background: stock.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: '#fff',
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                    {stock.logo}
+                  </div>
+                  <span style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-primary)',
+                    letterSpacing: '0.03em',
+                  }}>{stock.ticker}</span>
                 </div>
-                <span style={{
-                  fontSize: 14,
+                <h2 style={{
+                  fontSize: 20,
                   fontWeight: 600,
-                  fontFamily: 'var(--font-mono)',
                   color: 'var(--text-primary)',
-                  letterSpacing: '0.03em',
-                }}>{stock.ticker}</span>
+                  letterSpacing: '-0.01em',
+                  lineHeight: 1.2,
+                }}>{stock.name}</h2>
+                <span style={{
+                  fontSize: 12,
+                  color: 'var(--text-tertiary)',
+                  marginTop: 4,
+                  display: 'block',
+                }}>{stock.sector}</span>
               </div>
-              <h2 style={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.01em',
-                lineHeight: 1.2,
-              }}>{stock.name}</h2>
-              <span style={{
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                marginTop: 4,
-                display: 'block',
-              }}>{stock.sector}</span>
             </div>
-          </div>
+          )}
 
           {/* Price + change / hover info */}
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: detailMode ? 8 : 20 }}>
             <div style={{
               display: 'flex',
               alignItems: 'baseline',
@@ -287,7 +289,7 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
             style={{
               display: 'flex',
               gap: 6,
-              marginTop: 14,
+              marginTop: detailMode ? 8 : 14,
             }}
           >
             {RANGES.map(({ key }) => (
@@ -321,7 +323,7 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
 
           {/* Chart */}
           <div
-            style={{ flex: 1, marginTop: 12, minHeight: 0 }}
+            style={{ flex: 1, marginTop: detailMode ? 8 : 12, minHeight: 0 }}
             onClick={(e) => e.stopPropagation()}
           >
             <MiniChart

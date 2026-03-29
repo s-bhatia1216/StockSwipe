@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import SwipeView from './components/SwipeView'
 import PortfolioView from './components/PortfolioView'
+import StockDetailModal from './components/StockDetailModal'
 import SectorPicker, { resolveSectors } from './components/SectorPicker'
 import { Compass, Briefcase, Sparkles } from 'lucide-react'
 import { STOCKS } from './data/stocks'
@@ -57,6 +58,27 @@ export default function App() {
     setPortfolio([])
     setSkipped([])
     setCurrentIndex(0)
+  }
+
+  // Portfolio detail modal
+  const [detailModal, setDetailModal] = useState(null) // { ticker, mode: 'buy'|'sell' }
+
+  const handleHoldingAction = (ticker, mode) => {
+    setDetailModal({ ticker, mode })
+  }
+
+  const handleBuyMore = (ticker, amount) => {
+    setPortfolio((prev) =>
+      prev.map((h) => h.ticker === ticker ? { ...h, amount: h.amount + amount } : h)
+    )
+  }
+
+  const handleSell = (ticker, amount) => {
+    setPortfolio((prev) =>
+      prev
+        .map((h) => h.ticker === ticker ? { ...h, amount: h.amount - amount } : h)
+        .filter((h) => h.amount > 0)
+    )
   }
 
   const holdings = portfolio.map((h) => ({
@@ -223,6 +245,7 @@ export default function App() {
             <PortfolioView
               key="portfolio"
               holdings={holdings}
+              onHoldingAction={handleHoldingAction}
             />
           )}
         </AnimatePresence>
@@ -233,6 +256,25 @@ export default function App() {
         {selectedSectors === null && (
           <SectorPicker key="sector-picker" onConfirm={handleSectorConfirm} />
         )}
+      </AnimatePresence>
+
+      {/* Stock detail modal (buy more / sell) */}
+      <AnimatePresence>
+        {detailModal && (() => {
+          const modalHolding = holdings.find((h) => h.ticker === detailModal.ticker)
+          if (!modalHolding) return null
+          return (
+            <StockDetailModal
+              key="stock-detail"
+              stock={modalHolding.stock}
+              holding={modalHolding}
+              initialMode={detailModal.mode}
+              onClose={() => setDetailModal(null)}
+              onBuyMore={handleBuyMore}
+              onSell={handleSell}
+            />
+          )
+        })()}
       </AnimatePresence>
 
       <nav style={{
