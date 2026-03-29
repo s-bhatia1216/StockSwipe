@@ -14,6 +14,7 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
   const sharesFmt =
     shares < 0.01 ? shares.toFixed(6) : shares < 1 ? shares.toFixed(4) : shares.toFixed(2)
 
+  const hasPosition = holding.amount > 0
   const amountNum = parseFloat(amount) || 0
   const isValidAmount = amountNum > 0 && (mode === 'buy' || amountNum <= holding.amount)
 
@@ -118,16 +119,16 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
           padding: '12px 20px 28px',
           flexShrink: 0,
         }}>
-          {/* Buy / Sell toggle */}
+          {/* Buy / Sell toggle — hide sell when no position */}
           <div style={{
             display: 'flex', gap: 4, marginBottom: 14,
             background: 'var(--bg-surface)',
             borderRadius: 'var(--radius-md)', padding: 4,
           }}>
             {[
-              { id: 'buy', label: 'BUY MORE' },
-              { id: 'sell', label: 'SELL' },
-            ].map(({ id, label }) => (
+              { id: 'buy',  label: hasPosition ? 'BUY MORE' : 'INVEST' },
+              { id: 'sell', label: 'SELL', hidden: !hasPosition },
+            ].filter((t) => !t.hidden).map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => { setMode(id); setAmount('') }}
@@ -230,7 +231,9 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
             }}
           >
             {mode === 'buy'
-              ? `BUY $${amountNum > 0 ? amountNum.toFixed(2) : '–'} MORE`
+              ? hasPosition
+                ? `BUY $${amountNum > 0 ? amountNum.toFixed(2) : '–'} MORE`
+                : `INVEST $${amountNum > 0 ? amountNum.toFixed(2) : '–'}`
               : `SELL $${amountNum > 0 ? amountNum.toFixed(2) : '–'}`}
           </button>
         </div>

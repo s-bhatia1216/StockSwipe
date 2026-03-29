@@ -79,7 +79,10 @@ export default function App() {
 
   const handleBuyMore = (ticker, amount) => {
     setPortfolio((prev) => {
-      const next = prev.map((h) => h.ticker === ticker ? { ...h, amount: h.amount + amount } : h)
+      const exists = prev.find((h) => h.ticker === ticker)
+      const next = exists
+        ? prev.map((h) => h.ticker === ticker ? { ...h, amount: h.amount + amount } : h)
+        : [...prev, { ticker, amount }]
       localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
       return next
     })
@@ -266,7 +269,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <ReelsView stocks={sectorFiltered} />
+              <ReelsView stocks={sectorFiltered} onChipClick={(ticker) => setDetailModal({ ticker, mode: 'buy' })} />
             </motion.div>
           ) : (
             <PortfolioView
@@ -285,15 +288,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Stock detail modal (buy more / sell) */}
+      {/* Stock detail modal (buy more / sell / invest from reels) */}
       <AnimatePresence>
         {detailModal && (() => {
+          const modalStock   = STOCKS.find((s) => s.ticker === detailModal.ticker)
+          if (!modalStock) return null
           const modalHolding = holdings.find((h) => h.ticker === detailModal.ticker)
-          if (!modalHolding) return null
+            ?? { ticker: detailModal.ticker, amount: 0, stock: modalStock }
           return (
             <StockDetailModal
               key="stock-detail"
-              stock={modalHolding.stock}
+              stock={modalStock}
               holding={modalHolding}
               initialMode={detailModal.mode}
               onClose={() => setDetailModal(null)}

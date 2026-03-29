@@ -4,7 +4,7 @@ import { ChevronUp, ChevronDown, Play } from 'lucide-react'
 import { useStockReels, HAS_YT_KEY } from '../hooks/useStockReels'
 
 // ── Single reel card ───────────────────────────────────────────
-function ReelCard({ reel, onSwipeUp, onSwipeDown }) {
+function ReelCard({ reel, onSwipeUp, onSwipeDown, onChipClick }) {
   const embedSrc =
     `https://www.youtube.com/embed/${reel.videoId}` +
     `?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&controls=1`
@@ -42,14 +42,18 @@ function ReelCard({ reel, onSwipeUp, onSwipeDown }) {
         }}
         whileTap={{ cursor: 'grabbing' }}
       >
-        {/* Stock chip */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 8,
-          background: 'rgba(255,255,255,0.1)',
-          borderRadius: 20, padding: '4px 10px 4px 4px',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-        }}>
+        {/* Stock chip — tappable */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onChipClick(reel.ticker) }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 8,
+            background: 'rgba(255,255,255,0.13)',
+            borderRadius: 20, padding: '4px 12px 4px 4px',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.22)',
+            cursor: 'pointer',
+          }}
+        >
           <div style={{
             width: 26, height: 26, borderRadius: 7,
             background: reel.stockColor,
@@ -64,7 +68,8 @@ function ReelCard({ reel, onSwipeUp, onSwipeDown }) {
           }}>
             {reel.ticker}
           </span>
-        </div>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>›</span>
+        </button>
 
         {/* Channel */}
         <div style={{
@@ -171,7 +176,7 @@ function Spinner() {
 }
 
 // ── Main ReelsView ─────────────────────────────────────────────
-export default function ReelsView({ stocks }) {
+export default function ReelsView({ stocks, onChipClick }) {
   const { reels, loading, error } = useStockReels(stocks)
   const [index, setIndex] = useState(0)
   const [dir, setDir] = useState(1) // 1 = next (swipe up), -1 = prev (swipe down)
@@ -254,7 +259,7 @@ export default function ReelsView({ stocks }) {
           transition={{ type: 'spring', stiffness: 320, damping: 32 }}
           style={{ position: 'absolute', inset: 0 }}
         >
-          <ReelCard reel={reels[index]} onSwipeUp={goNext} onSwipeDown={goPrev} />
+          <ReelCard reel={reels[index]} onSwipeUp={goNext} onSwipeDown={goPrev} onChipClick={onChipClick} />
         </motion.div>
       </AnimatePresence>
 
@@ -294,22 +299,6 @@ export default function ReelsView({ stocks }) {
         >
           <ChevronDown size={18} />
         </button>
-      </div>
-
-      {/* Progress indicator — top center */}
-      <div style={{
-        position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-        background: 'rgba(0,0,0,0.5)',
-        border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 20, padding: '4px 12px', zIndex: 20,
-        backdropFilter: 'blur(6px)',
-      }}>
-        <span style={{
-          fontSize: 11, fontFamily: 'var(--font-mono)',
-          color: 'rgba(255,255,255,0.75)', letterSpacing: '0.04em',
-        }}>
-          {index + 1} / {reels.length}
-        </span>
       </div>
 
       {/* Progress bar — thin strip at very top */}
