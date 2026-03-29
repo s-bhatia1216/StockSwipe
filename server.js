@@ -394,7 +394,8 @@ Grade scale: A = excellent diversification + risk/reward, B = solid with minor g
 const distPath = join(__dirname, 'dist')
 if (existsSync(distPath)) {
   app.use(express.static(distPath))
-  app.get('*', (req, res) => res.sendFile(join(distPath, 'index.html')))
+  // Express 5 dropped bare '*' — use middleware catch-all instead
+  app.use((req, res) => res.sendFile(join(distPath, 'index.html')))
 }
 
 const PORT = process.env.PORT || 3001
