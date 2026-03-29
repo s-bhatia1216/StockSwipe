@@ -15,9 +15,7 @@
 
 ## Demo
 
-https://github.com/user-attachments/assets/demo.mov
-
-> **Note:** Download [demo.mov](demo.mov) to watch locally if the preview above doesn't render.
+[![StockSwipe Demo](https://img.youtube.com/vi/up3gJdMNWNM/maxresdefault.jpg)](https://youtube.com/shorts/up3gJdMNWNM?feature=share)
 
 ---
 
