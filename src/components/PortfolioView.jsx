@@ -1,5 +1,5 @@
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
-import { TrendingUp, TrendingDown, DollarSign, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, ChevronsLeft, ChevronsRight, Award } from 'lucide-react'
 import { useStockData } from '../hooks/useStockData'
 
 const SWIPE_THRESHOLD = 72
@@ -172,7 +172,7 @@ function HoldingRow({ holding, index, onAction }) {
   )
 }
 
-export default function PortfolioView({ holdings, onHoldingAction }) {
+export default function PortfolioView({ holdings, badges = [], onHoldingAction }) {
   if (!holdings || holdings.length === 0) {
     return (
       <motion.div
@@ -202,6 +202,23 @@ export default function PortfolioView({ holdings, onHoldingAction }) {
 
   const totalInvested = holdings.reduce((sum, h) => sum + h.amount, 0)
   const stockCount    = holdings.length
+
+  // Sector slices for donut
+  const sectorTotals = holdings.reduce((map, h) => {
+    const key = h.stock.sector || h.stock.sectorId || 'Other'
+    map[key] = map[key] || { amount: 0, color: h.stock.color, tickers: [] }
+    map[key].amount += h.amount
+    map[key].tickers.push(h.ticker)
+    if (!map[key].color) map[key].color = h.stock.color
+    return map
+  }, {})
+  const sectorSlices = Object.entries(sectorTotals)
+    .map(([sector, data]) => ({ sector, ...data }))
+    .sort((a, b) => b.amount - a.amount)
+
+  const ringRadius = 56
+  const circumference = 2 * Math.PI * ringRadius
+  let offset = 0
 
   return (
     <motion.div
@@ -240,26 +257,89 @@ export default function PortfolioView({ holdings, onHoldingAction }) {
           across {stockCount} {stockCount === 1 ? 'stock' : 'stocks'}
         </div>
 
-        {/* Color bar breakdown */}
-        <div style={{ display: 'flex', gap: 3, marginTop: 16, borderRadius: 4, overflow: 'hidden' }}>
-          {holdings.map((h) => (
-            <div
-              key={h.ticker}
-              title={`${h.stock.ticker}: $${h.amount.toFixed(2)}`}
-              style={{ flex: h.amount, height: 5, background: h.stock.color, opacity: 0.8 }}
-            />
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: 10 }}>
-          {holdings.map((h) => (
-            <div key={h.ticker} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: h.stock.color }} />
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                {h.stock.ticker}
-              </span>
+        {/* Diversification ring */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 16, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: 140, height: 140 }}>
+            <svg width="140" height="140" viewBox="0 0 140 140">
+              <circle
+                cx="70" cy="70" r={ringRadius}
+                fill="none"
+                stroke="var(--border)"
+                strokeWidth="12"
+                strokeDasharray={`${circumference}`}
+                strokeDashoffset={0}
+                opacity={0.35}
+              />
+              {sectorSlices.map((slice) => {
+                const pct = (slice.amount / totalInvested) * 100
+                const len = (pct / 100) * circumference
+                const stroke = slice.color || 'var(--accent-blue)'
+                const dashOffset = offset
+                offset -= len
+                return (
+                  <circle
+                    key={slice.sector}
+                    cx="70"
+                    cy="70"
+                    r={ringRadius}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth="12"
+                    strokeDasharray={`${len} ${circumference - len}`}
+                    strokeDashoffset={dashOffset}
+                    strokeLinecap="round"
+                  />
+                )
+              })}
+            </svg>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexDirection: 'column', gap: 2,
+            }}>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>Sectors</span>
+              <span style={{ fontSize: 18, fontWeight: 700 }}>{sectorSlices.length}</span>
             </div>
-          ))}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sectorSlices.map((slice) => (
+              <div key={slice.sector} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 999, background: slice.color || 'var(--accent-blue)' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{slice.sector}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    {slice.tickers.join(', ')}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                    {(slice.amount / totalInvested * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+
+        {badges.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+            {badges.map((b) => (
+              <div key={b.id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '8px 12px', borderRadius: 12,
+                background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)',
+                color: 'var(--text-primary)',
+              }}>
+                <Award size={14} color="#f7b733" />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{b.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{b.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Swipe hint */}

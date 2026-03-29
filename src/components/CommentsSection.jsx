@@ -32,6 +32,18 @@ function CommentRow({ comment, isReply = false, onReply, onLike }) {
             }}>
               @{comment.user}
             </span>
+            {comment.stance && comment.stance !== 'neutral' && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: comment.stance === 'bull' ? 'rgba(67,233,123,0.16)' : 'rgba(255,75,110,0.16)',
+                color: comment.stance === 'bull' ? '#2dd284' : '#ff4b6e',
+                fontSize: 10, fontWeight: 700,
+                padding: '2px 7px', borderRadius: 999,
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+              }}>
+                {comment.stance}
+              </span>
+            )}
             {comment.verified && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -135,20 +147,35 @@ function CommentRow({ comment, isReply = false, onReply, onLike }) {
   )
 }
 
+function tagWithStance(comment) {
+  const text = (comment.text || '').toLowerCase()
+  const bearWords = ['bubble', 'overvalued', 'short', 'sell', 'risk', 'litigation', 'bear', 'drop', 'down', 'expensive']
+  const bullWords = ['🚀', 'buy', 'bull', 'moat', 'undervalued', 'growth', 're-accel', 'printing']
+  const isBear = bearWords.some((w) => text.includes(w))
+  const isBull = bullWords.some((w) => text.includes(w))
+  return {
+    ...comment,
+    stance: isBear ? 'bear' : isBull ? 'bull' : 'neutral',
+    replies: comment.replies?.map(tagWithStance) ?? [],
+  }
+}
+
 export default function CommentsSection({ ticker }) {
-  const [comments, setComments] = useState(() => STOCK_COMMENTS[ticker] ?? [])
+  const [comments, setComments] = useState(() => (STOCK_COMMENTS[ticker] ?? []).map(tagWithStance))
   const [newText, setNewText]     = useState('')
   const [replyToId, setReplyToId] = useState(null)
   const [replyText, setReplyText] = useState('')
+  const [filter, setFilter]       = useState('all')
   const inputRef = useRef(null)
   const listRef  = useRef(null)
 
   // Reset when ticker changes
   useEffect(() => {
-    setComments(STOCK_COMMENTS[ticker] ?? [])
+    setComments((STOCK_COMMENTS[ticker] ?? []).map(tagWithStance))
     setNewText('')
     setReplyToId(null)
     setReplyText('')
+    setFilter('all')
   }, [ticker])
 
   function handleLike(commentId) {
@@ -205,6 +232,7 @@ export default function CommentsSection({ ticker }) {
       likes: 0,
       liked: false,
       replies: [],
+      stance: 'bull',
     }
     setComments((prev) => [myComment, ...prev])
     setNewText('')
@@ -214,6 +242,7 @@ export default function CommentsSection({ ticker }) {
 
   const totalCount = comments.reduce((sum, c) => sum + 1 + (c.replies?.length ?? 0), 0)
   const replyingTo = replyToId ? comments.find((c) => c.id === replyToId) : null
+  const filtered = comments.filter((c) => filter === 'all' ? true : c.stance === filter || (c.stance === 'neutral' && filter === 'bull'))
 
   return (
     <div style={{
@@ -238,6 +267,27 @@ export default function CommentsSection({ ticker }) {
         }}>
           {totalCount.toLocaleString()}
         </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 999, padding: 4 }}>
+          {[
+            { key: 'all',  label: 'All' },
+            { key: 'bull', label: 'Bull' },
+            { key: 'bear', label: 'Bear' },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setFilter(opt.key)}
+              style={{
+                background: filter === opt.key ? 'rgba(79,172,254,0.12)' : 'transparent',
+                color: filter === opt.key ? '#4facfe' : 'var(--text-tertiary)',
+                border: 'none', borderRadius: 999,
+                padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Scrollable comment list */}
@@ -250,7 +300,7 @@ export default function CommentsSection({ ticker }) {
         }}
       >
         <AnimatePresence initial={false}>
-          {comments.map((comment) => (
+          {filtered.map((comment) => (
             <motion.div
               key={comment.id}
               initial={{ opacity: 0, y: -10 }}

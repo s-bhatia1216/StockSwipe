@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import SwipeView from './components/SwipeView'
 import PortfolioView from './components/PortfolioView'
@@ -6,13 +6,16 @@ import ReelsView from './components/ReelsView'
 import InsightsView from './components/InsightsView'
 import StockDetailModal from './components/StockDetailModal'
 import SectorPicker from './components/SectorPicker'
-import { Compass, Briefcase, Clapperboard, Sparkles } from 'lucide-react'
+import FriendsFeed from './components/FriendsFeed'
+import { Compass, Briefcase, Clapperboard, Sparkles, Users, Flame } from 'lucide-react'
 import { STOCKS } from './data/stocks'
 
 const STORAGE_SECTORS   = 'stockswipe_sectors'
 const STORAGE_PORTFOLIO = 'stockswipe_portfolio'
 const STORAGE_SKIPPED   = 'stockswipe_skipped'
 const STORAGE_AMOUNT    = 'stockswipe_amount'
+const STORAGE_BADGES    = 'stockswipe_badges'
+const STORAGE_STREAK    = 'stockswipe_streak'
 
 function loadStorage(key, fallback) {
   try {
@@ -29,6 +32,8 @@ export default function App() {
   const [investAmount, setInvestAmount] = useState(() => loadStorage(STORAGE_AMOUNT, 1))
   const [editingAmount, setEditingAmount] = useState(false)
   const [draftAmount, setDraftAmount]     = useState(() => String(loadStorage(STORAGE_AMOUNT, 1)))
+  const [badges, setBadges] = useState(() => loadStorage(STORAGE_BADGES, []))
+  const [streak, setStreak] = useState(() => loadStorage(STORAGE_STREAK, { current: 0, longest: 0, lastDate: null }))
 
   // Sector onboarding — null means not yet confirmed
   const [selectedSectors, setSelectedSectors] = useState(() => loadStorage(STORAGE_SECTORS, null))
@@ -54,6 +59,8 @@ export default function App() {
       localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
       return next
     })
+    touchStreak()
+    maybeAwardBadges(ticker)
   }
 
   const handleSwipeLeft = (ticker) => {
@@ -62,6 +69,7 @@ export default function App() {
       localStorage.setItem(STORAGE_SKIPPED, JSON.stringify(next))
       return next
     })
+    touchStreak()
   }
 
   const handleReset = () => {
@@ -87,6 +95,7 @@ export default function App() {
       localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
       return next
     })
+    maybeAwardBadges(ticker)
   }
 
   const handleSell = (ticker, amount) => {
@@ -99,10 +108,69 @@ export default function App() {
     })
   }
 
+  // ── Streak tracking ───────────────────────────────────────────────────────
+  const todayKey = () => new Date().toISOString().split('T')[0]
+
+  const touchStreak = () => {
+    setStreak((prev) => {
+      const today = todayKey()
+      if (prev.lastDate === today) return prev
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yKey = yesterday.toISOString().split('T')[0]
+      const nextCurrent = prev.lastDate === yKey ? prev.current + 1 : 1
+      const next = {
+        current: nextCurrent,
+        longest: Math.max(prev.longest || 0, nextCurrent),
+        lastDate: today,
+      }
+      localStorage.setItem(STORAGE_STREAK, JSON.stringify(next))
+      return next
+    })
+  }
+
+  // ── Badges ───────────────────────────────────────────────────────────────
+  const badgeDefs = {
+    early:   { id: 'early', title: 'Early adopter',  desc: 'Bought before a 10%+ run' },
+    diamond: { id: 'diamond', title: 'Diamond hands', desc: 'Held through a -20% red day' },
+  }
+
+  const maybeAwardBadges = (ticker) => {
+    const stock = STOCKS.find((s) => s.ticker === ticker)
+    if (!stock) return
+
+    const growthBase = stock.chartData?.[0] ?? stock.price * 0.9
+    const growthNow  = stock.chartData?.at(-1) ?? stock.price
+    const growthPct  = ((growthNow - growthBase) / growthBase) * 100
+
+    const awards = []
+    if (growthPct >= 10) awards.push(badgeDefs.early)
+    if ((stock.changePct ?? 0) <= -8) awards.push(badgeDefs.diamond)
+
+    if (awards.length === 0) return
+
+    setBadges((prev) => {
+      const ids = new Set(prev.map((b) => b.id))
+      let changed = false
+      const next = [...prev]
+      awards.forEach((b) => {
+        if (!ids.has(b.id)) { next.push(b); ids.add(b.id); changed = true }
+      })
+      if (changed) localStorage.setItem(STORAGE_BADGES, JSON.stringify(next))
+      return changed ? next : prev
+    })
+  }
+
   const holdings = portfolio.map((h) => ({
     ...h,
     stock: STOCKS.find((s) => s.ticker === h.ticker),
   })).filter((h) => h.stock)
+
+  // Award diamond hands if holding any deep red names
+  useEffect(() => {
+    const redHoldings = holdings.filter((h) => (h.stock.changePct ?? 0) <= -8)
+    if (redHoldings.length > 0) maybeAwardBadges(redHoldings[0].ticker)
+  }, [holdings])
 
   return (
     <div style={{
@@ -134,7 +202,15 @@ export default function App() {
             letterSpacing: '-0.02em',
             color: 'var(--text-primary)',
           }}>
-            {view === 'discover' ? 'Discover' : view === 'reels' ? 'Reels' : view === 'insights' ? 'AI Insights' : 'Portfolio'}
+            {view === 'discover'
+              ? 'Discover'
+              : view === 'reels'
+              ? 'Reels'
+              : view === 'insights'
+              ? 'AI Insights'
+              : view === 'friends'
+              ? 'Friends'
+              : 'Portfolio'}
           </h1>
           <p style={{
             fontSize: 13,
@@ -148,9 +224,30 @@ export default function App() {
               ? 'stock shorts'
               : view === 'insights'
               ? `${holdings.length} holdings analyzed`
+              : view === 'friends'
+              ? 'what your crew is buying'
               : `${holdings.length} holdings`
             }
           </p>
+          {streak.current > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,140,0,0.12)',
+                color: '#ff8c00', borderRadius: 999,
+                padding: '5px 10px', fontSize: 12, fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+              }}>
+                <Flame size={14} />
+                {streak.current}-day streak
+              </div>
+              {streak.longest > streak.current && (
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  best {streak.longest}d
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Center: investment amount pill (discover only) */}
@@ -284,10 +381,21 @@ export default function App() {
             >
               <InsightsView holdings={holdings} />
             </motion.div>
+          ) : view === 'friends' ? (
+            <motion.div
+              key="friends"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <FriendsFeed />
+            </motion.div>
           ) : (
             <PortfolioView
               key="portfolio"
               holdings={holdings}
+              badges={badges}
               onHoldingAction={handleHoldingAction}
             />
           )}
@@ -334,6 +442,7 @@ export default function App() {
           { id: 'discover',  icon: Compass,      label: 'Discover'  },
           { id: 'reels',     icon: Clapperboard, label: 'Reels'     },
           { id: 'portfolio', icon: Briefcase,     label: 'Portfolio' },
+          { id: 'friends',   icon: Users,         label: 'Friends'   },
           { id: 'insights',  icon: Sparkles,      label: 'Insights'  },
         ].map(({ id, icon: Icon, label }) => (
           <button
