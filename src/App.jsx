@@ -431,7 +431,7 @@ export default function App() {
       </header>
 
       <main style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {view === 'discover' ? (
             <SwipeView
               key="discover"
@@ -459,7 +459,10 @@ export default function App() {
               exit={{ opacity: 0 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <InsightsView holdings={holdings} />
+              <InsightsView
+                holdings={holdings}
+                onRecommendationBuy={(ticker) => setDetailModal({ ticker, mode: 'buy' })}
+              />
             </motion.div>
           ) : view === 'friends' ? (
             <motion.div
