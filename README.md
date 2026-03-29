@@ -129,4 +129,6 @@ src/
 ### Yash
 - Friends feed and leaderboard
 - Portfolio diversification donut
-- Streaks and badges
+- Streaks, badges, sound effects (gamification)
+- Youtube shorts 
+- Yahoo finance API for front page charts
