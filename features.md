@@ -41,14 +41,6 @@
 
 ---
 
-### 🔴 Must ship before demo
-
-| # | Feature | Why it matters |
-|---|---------|----------------|
-| 1 | **Trade[XYZ] integration or mock** | Title sponsor. Even a mock confirmation modal with perpetual futures framing earns major points. |
-
----
-
 ### 🟡 High impact if time allows
 
 | # | Feature | Why it matters |
