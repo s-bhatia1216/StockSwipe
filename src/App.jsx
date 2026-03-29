@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import SwipeView from './components/SwipeView'
 import PortfolioView from './components/PortfolioView'
+import ReelsView from './components/ReelsView'
 import StockDetailModal from './components/StockDetailModal'
 import SectorPicker from './components/SectorPicker'
-import { Compass, Briefcase, Sparkles } from 'lucide-react'
+import { Compass, Briefcase, Clapperboard, Sparkles } from 'lucide-react'
 import { STOCKS } from './data/stocks'
 
 const STORAGE_SECTORS   = 'stockswipe_sectors'
@@ -129,7 +130,7 @@ export default function App() {
             letterSpacing: '-0.02em',
             color: 'var(--text-primary)',
           }}>
-            {view === 'discover' ? 'Discover' : 'Portfolio'}
+            {view === 'discover' ? 'Discover' : view === 'reels' ? 'Reels' : 'Portfolio'}
           </h1>
           <p style={{
             fontSize: 13,
@@ -139,6 +140,8 @@ export default function App() {
           }}>
             {view === 'discover'
               ? `${remaining.length} stocks remaining`
+              : view === 'reels'
+              ? 'stock shorts'
               : `${holdings.length} holdings`
             }
           </p>
@@ -255,6 +258,16 @@ export default function App() {
               portfolioCount={holdings.length}
               investAmount={investAmount}
             />
+          ) : view === 'reels' ? (
+            <motion.div
+              key="reels"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <ReelsView stocks={sectorFiltered} />
+            </motion.div>
           ) : (
             <PortfolioView
               key="portfolio"
@@ -300,9 +313,10 @@ export default function App() {
         flexShrink: 0,
       }}>
         {[
-          { id: 'discover', icon: Compass, label: 'Discover' },
-          { id: 'portfolio', icon: Briefcase, label: 'Portfolio' },
-          { id: 'insights', icon: Sparkles, label: 'AI Insights' },
+          { id: 'discover',  icon: Compass,      label: 'Discover'  },
+          { id: 'reels',     icon: Clapperboard, label: 'Reels'     },
+          { id: 'portfolio', icon: Briefcase,     label: 'Portfolio' },
+          { id: 'insights',  icon: Sparkles,      label: 'Insights'  },
         ].map(({ id, icon: Icon, label }) => (
           <button
             key={id}
