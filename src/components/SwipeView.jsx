@@ -203,8 +203,7 @@ export default function SwipeView({ stocks, onSwipeRight, onSwipeLeft, portfolio
             >
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 7,
-                background: 'rgba(12,12,20,0.84)',
-                backdropFilter: 'blur(10px)',
+                background: 'rgba(12,12,20,0.93)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 20,
                 padding: '5px 12px 5px 5px',
@@ -281,8 +280,7 @@ export default function SwipeView({ stocks, onSwipeRight, onSwipeLeft, portfolio
                 position: 'absolute', bottom: 14, left: '50%',
                 transform: 'translateX(-50%)',
                 display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(12,12,22,0.78)',
-                backdropFilter: 'blur(12px)',
+                background: 'rgba(12,12,22,0.92)',
                 border: '1px solid rgba(255,255,255,0.14)',
                 borderRadius: 24, padding: '7px 16px',
                 color: 'rgba(255,255,255,0.75)',

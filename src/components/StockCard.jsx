@@ -78,10 +78,10 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
   const handleDragEnd = (_, info) => {
     const ax = Math.abs(info.offset.x)
     const ay = Math.abs(info.offset.y)
-    if (ax > 120 && ax > ay) {
+    if (ax > 72 && ax > ay) {
       if (info.offset.x > 0) onSwipeRight(stock.ticker)
       else onSwipeLeft(stock.ticker)
-    } else if (info.offset.y > 80 && ay > ax) {
+    } else if (info.offset.y > 60 && ay > ax) {
       onSwipeDown?.()
     }
   }
@@ -104,10 +104,13 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
         cursor: (isTop && !detailMode) ? 'grab' : 'default',
         perspective: 1000,
         zIndex: isTop ? 10 : 1,
+        willChange: 'transform',
+        touchAction: (isTop && !detailMode) ? 'none' : 'pan-y',
       }}
       drag={isTop && !detailMode ? true : false}
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragElastic={0.9}
+      dragElastic={0.55}
+      dragMomentum={false}
       onDragEnd={handleDragEnd}
       initial={detailMode ? false : { scale: 0.92, opacity: 0, y: 30 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}

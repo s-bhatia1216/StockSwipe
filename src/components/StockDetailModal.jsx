@@ -47,9 +47,7 @@ export default function StockDetailModal({ stock, holding, initialMode = 'buy', 
         position: 'absolute',
         inset: 0,
         zIndex: 200,
-        background: 'rgba(0,0,0,0.65)',
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
+        background: 'rgba(0,0,0,0.75)',
       }}
       onClick={onClose}
     >
