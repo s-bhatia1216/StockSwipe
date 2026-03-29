@@ -112,38 +112,6 @@ app.get('/api/stock/:ticker/:range', async (req, res) => {
   }
 })
 
-// ── GET /api/hook/:ticker  — "Why this stock?" one-liner ────────────────────
-app.get('/api/hook/:ticker', async (req, res) => {
-  const ticker = req.params.ticker.toUpperCase()
-  const cacheKey = `hook_${ticker}`
-  const cached = getCached(cacheKey)
-  if (cached) return res.json({ hook: cached })
-
-  const defaultHook = `${ticker}: steady momentum, catching buyers' attention today.`
-
-  try {
-    // Lightweight deterministic hook if Anthropic is missing
-    if (!HAS_ANTHROPIC) {
-      setCached(cacheKey, defaultHook, CACHE_TTL.hook)
-      return res.json({ hook: defaultHook })
-    }
-
-    const prompt = `Give one punchy, 8-14 word hook on why the stock ${ticker} is interesting *today*. No ticker prefix. No emojis.`
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 60,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-    const hook = text.split('\n')[0].slice(0, 140) || defaultHook
-    setCached(cacheKey, hook, CACHE_TTL.hook)
-    res.json({ hook })
-  } catch (err) {
-    console.error('[hook]', err.message)
-    setCached(cacheKey, defaultHook, CACHE_TTL.hook)
-    res.json({ hook: defaultHook })
-  }
-})
 
 // ── GET /api/news-insights/:ticker ───────────────────────────────────────────
 async function fetchOgImage(url) {

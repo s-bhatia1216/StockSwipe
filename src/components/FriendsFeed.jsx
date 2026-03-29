@@ -1,634 +1,818 @@
 import { useMemo, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Trophy, Sparkle, Shuffle, Filter, Crown, TrendingUp, TrendingDown, X, ArrowUpRight, ArrowDownRight, LineChart } from 'lucide-react'
+import { Trophy, X, ChevronUp, ChevronDown, Minus, Flame } from 'lucide-react'
 import { FRIEND_FEED } from '../data/social'
-import MiniChart from './MiniChart'
+import { playDiamondSound, playPaperSound } from '../utils/sounds'
 
-const clamp = (v, min, max) => Math.min(Math.max(v, min), max)
-
-const hashSeed = (str = '') => str.split('').reduce((acc, ch) => acc * 31 + ch.charCodeAt(0), 7)
+// ─── Seeded RNG helpers ────────────────────────────────────────────────────────
+const hashSeed = (str = '') => str.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7)
 const makeRng = (seed) => {
   let s = seed
-  return () => {
-    s = (s * 9301 + 49297) % 233280
-    return s / 233280
-  }
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280 }
 }
 
-function buildSeries(key, targetPct, points = 28) {
-  const rand = makeRng(hashSeed(key))
+// ─── Sound effects ─────────────────────────────────────────────────────────────
+function playTapSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(600, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05)
+    gain.gain.setValueAtTime(0.18, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.14)
+  } catch (_) {}
+}
+
+function playPraiseSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // Ascending major chord: C5 E5 G5
+    ;[523.25, 659.25, 783.99].forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const t = ctx.currentTime + i * 0.07
+      gain.gain.setValueAtTime(0.001, t)
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28)
+      osc.start(t); osc.stop(t + 0.32)
+    })
+  } catch (_) {}
+}
+
+function playRoastSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // Descending "wah wah" : Bb4 → Ab4 → G4
+    ;[466.16, 415.3, 392.0].forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.type = 'sawtooth'
+      osc.frequency.value = freq
+      const t = ctx.currentTime + i * 0.13
+      gain.gain.setValueAtTime(0.001, t)
+      gain.gain.linearRampToValueAtTime(0.1, t + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22)
+      osc.start(t); osc.stop(t + 0.28)
+    })
+  } catch (_) {}
+}
+
+// ─── Roast / Praise banks ──────────────────────────────────────────────────────
+const ROASTS = [
+  "They're printing money while you're printing excuses.",
+  "Your portfolio called. It filed for emotional support.",
+  "Bro opened Robinhood and closed a therapy session.",
+  "Even your diversification chart looks sad.",
+  "Their returns are aging like wine. Yours aged like milk.",
+  "Sir, this is a Wendy's. But also, they're beating you.",
+  "Not all heroes wear capes. Some just buy stocks earlier than you.",
+  "The market is up. You found a way.",
+]
+const PRAISES = [
+  "You're built different. They're still catching up.",
+  "Touch grass? Nah. Touch those green candles.",
+  "Your portfolio is doing push-ups while theirs naps.",
+  "Different class. Genuinely.",
+  "You said 'buy the dip' and meant it. Respect.",
+  "The gap between you two is sponsored by better decisions.",
+  "Not to flex, but... okay, flex a little.",
+]
+
+function pickMsg(arr, seed) {
+  const rng = makeRng(hashSeed(seed))
+  return arr[Math.floor(rng() * arr.length)]
+}
+
+// ─── Build a fake 30-point return series for sparkline ─────────────────────────
+function buildSeries(key, targetPct, points = 30) {
+  const rng = makeRng(hashSeed(key))
   const start = 100
-  const target = start * (1 + targetPct / 100)
+  const end = start * (1 + targetPct / 100)
   const series = []
   for (let i = 0; i < points; i++) {
     const t = i / (points - 1)
-    const drift = (target - start) * t
-    const noise = (rand() - 0.5) * 3 + Math.sin(i * 0.85) * 0.7
-    series.push(Math.max(92, start + drift + noise))
+    const drift = (end - start) * t
+    const noise = (rng() - 0.5) * 2.4 + Math.sin(i * 0.9) * 0.5
+    series.push(Math.max(90, start + drift + noise))
   }
-  series[points - 1] = target
+  series[points - 1] = end
   return series
 }
 
-// Make sure we always have someone ahead of and behind the user
-function ensureSpread(friends, userReturn) {
-  if (!friends.length) return []
-  const list = friends.map((f) => ({ ...f }))
-  const max = Math.max(...list.map((f) => f.returnPct))
-  const min = Math.min(...list.map((f) => f.returnPct))
-  if (userReturn >= max) list[0].returnPct = userReturn + 3.2
-  if (userReturn <= min) list[list.length - 1].returnPct = userReturn - 3.4
-  return list
+// ─── Tiny inline SVG sparkline ─────────────────────────────────────────────────
+function Sparkline({ data, color, width = 120, height = 36 }) {
+  if (!data || data.length < 2) return null
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width
+    const y = height - ((v - min) / range) * (height - 4) - 2
+    return `${x},${y}`
+  })
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.85"
+      />
+    </svg>
+  )
 }
 
-function playModalTone() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const main = ctx.createOscillator()
-    const overtone = ctx.createOscillator()
-    const gain = ctx.createGain()
-    main.type = 'triangle'
-    overtone.type = 'sine'
-    main.frequency.value = 420
-    overtone.frequency.value = 640
-    overtone.detune.value = 14
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.002, ctx.currentTime + 0.32)
-    main.connect(gain)
-    overtone.connect(gain)
-    gain.connect(ctx.destination)
-    main.start()
-    overtone.start()
-    main.stop(ctx.currentTime + 0.35)
-    overtone.stop(ctx.currentTime + 0.35)
-  } catch {}
+// ─── Rank badge (medal / number) ───────────────────────────────────────────────
+function RankBadge({ rank }) {
+  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' }
+  if (medals[rank]) {
+    return <span style={{ fontSize: 22, lineHeight: 1 }}>{medals[rank]}</span>
+  }
+  return (
+    <div style={{
+      width: 28, height: 28, borderRadius: '50%',
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--border)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)',
+      fontFamily: 'var(--font-mono)',
+    }}>{rank}</div>
+  )
 }
 
-function FeedCard({ item, idx, onOpen }) {
+// ─── Rank delta chip ───────────────────────────────────────────────────────────
+function DeltaBadge({ delta }) {
+  if (delta === 0) return <Minus size={12} color="var(--text-tertiary)" />
+  const up = delta > 0
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 2,
+      fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono)',
+      color: up ? 'var(--accent-green)' : 'var(--accent-red)',
+    }}>
+      {up ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      {Math.abs(delta)}
+    </span>
+  )
+}
+
+// ─── Hand badge (diamond / paper) ─────────────────────────────────────────────
+function HandBadge({ hand, animate: doAnimate = false }) {
+  const isDiamond = hand === 'diamond'
+  return (
+    <motion.span
+      title={isDiamond ? 'Diamond hands — holds through dips' : 'Paper hands — sells quickly'}
+      animate={doAnimate ? (isDiamond
+        ? { scale: [1, 1.35, 1], rotate: [0, -10, 10, 0] }
+        : { scale: [1, 0.85, 1], rotate: [0, 5, -5, 0] }
+      ) : {}}
+      transition={{ duration: 0.5, ease: 'easeInOut' }}
+      style={{ fontSize: 14, lineHeight: 1, cursor: 'default' }}
+    >
+      {isDiamond ? '💎' : '🧻'}
+    </motion.span>
+  )
+}
+
+// ─── Streak chip ───────────────────────────────────────────────────────────────
+function StreakChip({ streak }) {
+  if (!streak) return null
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)',
+      color: '#ff8c00',
+      background: 'rgba(255,140,0,0.1)',
+      borderRadius: 999,
+      padding: '2px 6px',
+    }}>
+      <Flame size={9} />
+      {streak}d
+    </span>
+  )
+}
+
+// ─── Animated head-to-head bar ─────────────────────────────────────────────────
+function HeadToHeadBar({ userReturn, friendReturn, userName, friendName }) {
+  const total = Math.abs(userReturn) + Math.abs(friendReturn) + 0.001
+  const userPct = (Math.abs(userReturn) / (Math.abs(userReturn) + Math.abs(friendReturn))) * 100
+  const friendPct = 100 - userPct
+  const userWins = userReturn >= friendReturn
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontSize: 11, fontFamily: 'var(--font-mono)',
+        color: 'var(--text-tertiary)', marginBottom: 6,
+      }}>
+        <span style={{ color: 'var(--accent-blue)' }}>YOU {userReturn >= 0 ? '+' : ''}{userReturn.toFixed(1)}%</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{friendName} {friendReturn >= 0 ? '+' : ''}{friendReturn.toFixed(1)}%</span>
+      </div>
+      <div style={{
+        height: 8, borderRadius: 999,
+        background: 'var(--bg-surface)',
+        overflow: 'hidden', display: 'flex',
+      }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${userPct}%` }}
+          transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
+          style={{
+            background: userWins ? 'var(--accent-green)' : 'var(--accent-red)',
+            borderRadius: '999px 0 0 999px',
+          }}
+        />
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${friendPct}%` }}
+          transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
+          style={{
+            background: 'rgba(255,255,255,0.15)',
+            borderRadius: '0 999px 999px 0',
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Friend detail modal ───────────────────────────────────────────────────────
+export function FriendModal({ friend, userReturn, userSeries, onClose }) {
+  const friendSeries = useMemo(() => buildSeries(friend.id + '_modal', friend.returnPct), [friend])
+  const userBeating = userReturn > friend.returnPct
+
+  useEffect(() => {
+    // Play sound on open — diamond chime if friend has diamond hands, paper crinkle if paper
+    // then overlay praise/roast
+    if (friend.hand === 'diamond') playDiamondSound()
+    else if (friend.hand === 'paper') playPaperSound()
+    const t = setTimeout(() => {
+      if (userBeating) playPraiseSound()
+      else playRoastSound()
+    }, friend.hand ? 600 : 0)
+    return () => clearTimeout(t)
+  }, [])
+  const gap = Math.abs(userReturn - friend.returnPct).toFixed(1)
+
+  const verdict = userBeating
+    ? pickMsg(PRAISES, friend.id + '_praise')
+    : pickMsg(ROASTS, friend.id + '_roast')
+
+  const vibeColors = {
+    'up only': 'var(--accent-green)',
+    steady: '#60a5fa',
+    momentum: '#f7b733',
+    drift: 'var(--text-tertiary)',
+    cooldown: '#a78bfa',
+    retooling: '#fb923c',
+  }
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.05 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
-        padding: '12px 14px',
-        boxShadow: '0 12px 24px rgba(0,0,0,0.14)',
-        cursor: 'pointer',
+        position: 'absolute', inset: 0,
+        background: 'rgba(0,0,0,0.72)',
+        zIndex: 200,
+        display: 'flex', alignItems: 'flex-end',
+        backdropFilter: 'blur(6px)',
       }}
-      onClick={() => onOpen(item)}
+      onClick={onClose}
     >
-      <div style={{
-        width: 42, height: 42, borderRadius: 12,
-        overflow: 'hidden',
-        background: 'var(--bg-surface)',
-        boxShadow: '0 6px 14px rgba(0,0,0,0.18)',
-      }}>
-        <img src={item.photo} alt={item.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+        style={{
+          width: '100%', maxHeight: '88vh',
+          background: 'var(--bg-primary)',
+          borderRadius: '20px 20px 0 0',
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div style={{
+          width: 36, height: 4, borderRadius: 999,
+          background: 'var(--border)',
+          margin: '12px auto 0',
+          flexShrink: 0,
+        }} />
+
+        {/* Scrollable content */}
+        <div style={{ overflowY: 'auto', padding: '16px 20px 32px', flex: 1 }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+            <img
+              src={friend.photo}
+              alt={friend.user}
+              style={{ width: 54, height: 54, borderRadius: '50%', objectFit: 'cover' }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>
+                {friend.user}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  color: friend.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+                }}>
+                  {friend.returnPct >= 0 ? '+' : ''}{friend.returnPct.toFixed(1)}%
+                </span>
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 999,
+                  background: 'var(--bg-surface)',
+                  color: vibeColors[friend.vibe] || 'var(--text-secondary)',
+                  fontWeight: 600,
+                }}>
+                  {friend.vibe}
+                </span>
+                {friend.streak && <StreakChip streak={friend.streak} />}
+                {friend.hand && (
+                  <HandBadge hand={friend.hand} animate />
+                )}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={16} color="var(--text-secondary)" />
+            </button>
+          </div>
+
+          {/* Sparkline comparison */}
+          <div style={{
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+            padding: '14px 16px',
+            marginBottom: 14,
+          }}>
+            <div style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: 'var(--text-tertiary)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 10,
+            }}>
+              30-day return curve
+            </div>
+            <div style={{ position: 'relative', height: 56 }}>
+              {/* User line */}
+              <div style={{ position: 'absolute', inset: 0 }}>
+                <Sparkline data={userSeries} color="var(--accent-blue)" width={340} height={56} />
+              </div>
+              {/* Friend line */}
+              <div style={{ position: 'absolute', inset: 0 }}>
+                <Sparkline data={friendSeries} color={friend.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'} width={340} height={56} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 2, borderRadius: 999, background: 'var(--accent-blue)' }} />
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>You</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 8, height: 2, borderRadius: 999, background: friend.returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }} />
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{friend.user}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Head-to-head bar */}
+          <div style={{
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+            padding: '14px 16px',
+            marginBottom: 14,
+          }}>
+            <div style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: 'var(--text-tertiary)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 8,
+            }}>Head to head</div>
+            <HeadToHeadBar
+              userReturn={userReturn}
+              friendReturn={friend.returnPct}
+              userName="You"
+              friendName={friend.user}
+            />
+          </div>
+
+          {/* Top holdings */}
+          <div style={{
+            background: 'var(--bg-card)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+            padding: '14px 16px',
+            marginBottom: 14,
+          }}>
+            <div style={{
+              fontSize: 11, fontFamily: 'var(--font-mono)',
+              color: 'var(--text-tertiary)', letterSpacing: '0.06em',
+              textTransform: 'uppercase', marginBottom: 10,
+            }}>
+              {friend.user}'s top holdings
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {friend.portfolio.map((p) => (
+                <div key={p.ticker} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 10px', borderRadius: 10,
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
+                }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-primary)',
+                  }}>{p.ticker}</span>
+                  <span style={{
+                    fontSize: 11, fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-tertiary)',
+                  }}>{p.weight}%</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Bar chart for allocations */}
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {friend.portfolio.map((p) => (
+                <div key={p.ticker} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: 11, fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-tertiary)', width: 36, flexShrink: 0,
+                  }}>{p.ticker}</span>
+                  <div style={{
+                    flex: 1, height: 6, borderRadius: 999,
+                    background: 'var(--bg-surface)', overflow: 'hidden',
+                  }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${p.weight}%` }}
+                      transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
+                      style={{
+                        height: '100%', borderRadius: 999,
+                        background: 'var(--accent-blue)',
+                        opacity: 0.8,
+                      }}
+                    />
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-secondary)', width: 28, textAlign: 'right',
+                  }}>{p.weight}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Verdict card */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            style={{
+              borderRadius: 'var(--radius-md)',
+              padding: '16px 18px',
+              background: userBeating
+                ? 'rgba(34,197,94,0.08)'
+                : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${userBeating ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+            }}
+          >
+            <div style={{
+              fontSize: 22, marginBottom: 6,
+            }}>
+              {userBeating ? '🏆' : '💀'}
+            </div>
+            <div style={{
+              fontSize: 13, fontWeight: 600,
+              color: userBeating ? 'var(--accent-green)' : 'var(--accent-red)',
+              marginBottom: 6,
+            }}>
+              {userBeating
+                ? `You're up ${gap}% on ${friend.user}`
+                : `${friend.user} is up ${gap}% on you`}
+            </div>
+            <div style={{
+              fontSize: 13, color: 'var(--text-secondary)',
+              lineHeight: 1.5, fontStyle: 'italic',
+            }}>
+              "{verdict}"
+            </div>
+          </motion.div>
+
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── Your rank card at the top ────────────────────────────────────────────────
+function YourRankCard({ rank, total, returnPct, weekDelta }) {
+  const isUp = weekDelta > 0
+  const isFlat = weekDelta === 0
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        background: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(34,197,94,0.08) 100%)',
+        border: '1.5px solid rgba(59,130,246,0.35)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '16px 18px',
+        marginBottom: 16,
+        display: 'flex', alignItems: 'center', gap: 16,
+      }}
+    >
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 32 }}>
+          {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}
+        </div>
+        <div style={{
+          fontSize: 10, color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono)', marginTop: 2,
+        }}>
+          of {total}
+        </div>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{item.user}</span>
-          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{item.time}</span>
+
+      <div style={{ flex: 1 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 700, color: 'var(--accent-blue)',
+          fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+          marginBottom: 4,
+        }}>YOU</div>
+        <div style={{
+          fontSize: 24, fontWeight: 700, fontFamily: 'var(--font-mono)',
+          color: returnPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)',
+          letterSpacing: '-0.02em',
+        }}>
+          {returnPct >= 0 ? '+' : ''}{returnPct.toFixed(1)}%
         </div>
-        <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-          Swiped <strong>right</strong> on <strong>{item.ticker}</strong> · {item.name}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
-          ${item.amount.toFixed(0)} · {item.note}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 5, marginTop: 4,
+        }}>
+          {isFlat
+            ? <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>no change this week</span>
+            : <>
+                {isUp
+                  ? <ChevronUp size={13} color="var(--accent-green)" />
+                  : <ChevronDown size={13} color="var(--accent-red)" />}
+                <span style={{
+                  fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
+                }}>
+                  {isUp ? 'up' : 'down'} {Math.abs(weekDelta)} spot{Math.abs(weekDelta) !== 1 ? 's' : ''} this week
+                </span>
+              </>
+          }
         </div>
       </div>
     </motion.div>
   )
 }
 
-function LeaderboardRow({ row, onOpen }) {
-  const delta = row.rankDelta ?? 0
-  const dirColor = delta > 0 ? 'var(--accent-green)' : delta < 0 ? 'var(--accent-red)' : 'var(--text-tertiary)'
-  const ahead = (row.diff ?? 0) > 0
+// ─── Single leaderboard row ────────────────────────────────────────────────────
+function LeaderboardRow({ entry, rank, isUser, index, onClick }) {
+  const isUp = entry.returnPct >= 0
+
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.055, type: 'spring', stiffness: 320, damping: 28 }}
+      onClick={() => !isUser && onClick(entry)}
       style={{
-        display: 'grid',
-        gridTemplateColumns: '34px 1fr auto',
-        alignItems: 'center',
-        gap: 12,
-        padding: '12px 12px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 14px',
         borderRadius: 'var(--radius-md)',
-        background: row.isYou ? 'linear-gradient(90deg, rgba(79,172,254,0.08), rgba(0,212,161,0.12))' : 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        boxShadow: row.rank === 1 ? '0 12px 26px rgba(247,183,51,0.16)' : 'none',
-        cursor: row.isYou ? 'default' : 'pointer',
+        border: isUser
+          ? '1.5px solid rgba(59,130,246,0.5)'
+          : '1px solid var(--border)',
+        background: isUser
+          ? 'rgba(59,130,246,0.07)'
+          : 'var(--bg-card)',
+        cursor: isUser ? 'default' : 'pointer',
+        position: 'relative',
+        overflow: 'hidden',
       }}
-      onClick={() => !row.isYou && onOpen?.(row)}
+      whileHover={!isUser ? { scale: 1.015, transition: { duration: 0.15 } } : {}}
+      whileTap={!isUser ? { scale: 0.98 } : {}}
     >
-      <div style={{
-        width: 30,
-        height: 30,
-        borderRadius: 10,
-        background: row.rank === 1 ? '#f7b733' : 'var(--bg-card)',
-        color: row.rank === 1 ? '#000' : 'var(--text-tertiary)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 800, fontSize: 13,
-      }}>#{row.rank}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      {/* Rank */}
+      <div style={{ width: 28, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+        <RankBadge rank={rank} />
+      </div>
+
+      {/* Avatar */}
+      {isUser
+        ? (
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+            background: 'rgba(59,130,246,0.2)',
+            border: '2px solid rgba(59,130,246,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, fontWeight: 700, color: '#60a5fa',
+          }}>Y</div>
+        )
+        : (
+          <img
+            src={entry.photo}
+            alt={entry.user}
+            style={{
+              width: 40, height: 40, borderRadius: '50%',
+              objectFit: 'cover', flexShrink: 0,
+              border: '1px solid var(--border)',
+            }}
+          />
+        )
+      }
+
+      {/* Name + streak + hand */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 14, fontWeight: 600,
+            color: isUser ? '#60a5fa' : 'var(--text-primary)',
+          }}>
+            {isUser ? 'You' : entry.user}
+          </span>
+          {isUser && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, padding: '2px 5px',
+              borderRadius: 999, background: 'rgba(59,130,246,0.2)',
+              color: '#60a5fa', fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.06em',
+            }}>YOU</span>
+          )}
+          {isUser
+            ? <StreakChip streak={7} />
+            : <StreakChip streak={entry.streak} />
+          }
+          {!isUser && entry.hand && <HandBadge hand={entry.hand} />}
+        </div>
+        {!isUser && entry.ticker && (
+          <div style={{
+            fontSize: 11, color: 'var(--text-tertiary)',
+            fontFamily: 'var(--font-mono)', marginTop: 1,
+          }}>
+            {entry.action} {entry.ticker} · {entry.time}
+          </div>
+        )}
+      </div>
+
+      {/* Sparkline */}
+      <div style={{ opacity: 0.7, flexShrink: 0 }}>
+        <Sparkline
+          data={buildSeries(entry.id, entry.returnPct)}
+          color={isUp ? 'var(--accent-green)' : 'var(--accent-red)'}
+          width={60}
+          height={28}
+        />
+      </div>
+
+      {/* Return % + delta */}
+      <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 60 }}>
         <div style={{
-          width: 34, height: 34, borderRadius: 10,
-          background: row.photo ? 'var(--bg-card)' : 'var(--accent-purple-dim)',
-          overflow: 'hidden', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-primary)', fontWeight: 800, fontSize: 12,
-          border: row.isYou ? '1px solid rgba(255,255,255,0.12)' : 'none',
+          fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)',
+          color: isUp ? 'var(--accent-green)' : 'var(--accent-red)',
+          letterSpacing: '-0.01em',
         }}>
-          {row.photo ? <img src={row.photo} alt={row.user} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'YOU'}
+          {isUp ? '+' : ''}{entry.returnPct.toFixed(1)}%
         </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '-0.01em' }}>
-            {row.user} {row.isYou && <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>· you</span>}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-            <span>{ahead ? 'ahead of you' : row.isYou ? 'personal return' : 'trailing you'}</span>
-            <span style={{ color: dirColor, fontWeight: 700 }}>
-              {delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${Math.abs(delta)}` : '·'}
-            </span>
-            {row.prevRank && <span style={{ color: 'var(--text-tertiary)' }}>prev #{row.prevRank}</span>}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 3 }}>
+          <DeltaBadge delta={entry.rankDelta} />
         </div>
       </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>{row.perf?.toFixed(1)}%</div>
-        <div style={{ fontSize: 11, color: ahead ? 'var(--accent-red)' : row.isYou ? 'var(--text-tertiary)' : 'var(--accent-green)' }}>
-          {row.isYou ? 'your return' : ahead ? `You -${Math.abs(row.diff ?? 0).toFixed(1)}%` : `+${Math.abs(row.diff ?? 0).toFixed(1)}% vs you`}
-        </div>
-      </div>
-    </div>
+
+      {/* Tap hint for friends */}
+      {!isUser && (
+        <div style={{
+          position: 'absolute', right: 6, top: '50%',
+          transform: 'translateY(-50%)',
+          fontSize: 10, color: 'var(--border)',
+        }}>›</div>
+      )}
+    </motion.div>
   )
 }
 
-export default function FriendsFeed({ holdings = [] }) {
-  const [tab, setTab] = useState('feed')
-  const [onlyBig, setOnlyBig] = useState(false)
-  const [friendModal, setFriendModal] = useState(null)
+// ─── Main component ────────────────────────────────────────────────────────────
+export default function FriendsFeed({ holdings = [], onOpenFriend }) {
 
-  const userTotals = holdings.reduce((acc, h) => {
-    const pct = h.stock?.changePct ?? 0
-    acc.value += h.amount
-    acc.delta += h.amount * (pct / 100)
-    return acc
-  }, { value: 0, delta: 0 })
-  const userReturnPct = userTotals.value > 0 ? (userTotals.delta / userTotals.value) * 100 : 3.4 // seed a small return so some friends can lead
+  // Compute user return from actual holdings (weighted average of daily change)
+  const userReturn = useMemo(() => {
+    if (!holdings || holdings.length === 0) return 8.5
+    const total = holdings.reduce((s, h) => s + h.amount, 0)
+    if (total === 0) return 8.5
+    const weighted = holdings.reduce((s, h) => {
+      const chg = h.stock?.changePct ?? 0
+      return s + chg * (h.amount / total)
+    }, 0)
+    // Scale daily % to a "season return" that looks reasonable (5–18%)
+    return Math.min(Math.max(weighted * 6 + 8.5, 2), 22)
+  }, [holdings])
 
-  const friendBase = useMemo(() => ensureSpread(FRIEND_FEED, userReturnPct), [userReturnPct])
+  // Filter out "Yash" (f2) — that's the app user in the mock data
+  const friends = useMemo(() => FRIEND_FEED.filter((f) => f.id !== 'f2'), [])
 
-  const leaderboard = useMemo(() => {
-    const rows = friendBase.map((f) => ({
-      ...f,
-      perf: f.returnPct,
-    }))
-
-    const youRow = {
-      id: 'you',
+  // Build ranked list with user injected, ensure spread
+  const ranked = useMemo(() => {
+    const list = friends.map((f) => ({ ...f, isUser: false }))
+    const userEntry = {
+      id: 'me',
       user: 'You',
-      photo: null,
-      perf: userReturnPct,
-      rankDelta: userReturnPct >= 0 ? 1 : -1,
-      vibe: userReturnPct >= 0 ? 'grinding' : 'retooling',
-      isYou: true,
+      returnPct: userReturn,
+      rankDelta: 1,
+      isUser: true,
     }
+    list.push(userEntry)
+    list.sort((a, b) => b.returnPct - a.returnPct)
+    return list
+  }, [friends, userReturn])
 
-    const sorted = [...rows, youRow].sort((a, b) => (b.perf ?? 0) - (a.perf ?? 0))
-    const total = sorted.length
+  const userRank = ranked.findIndex((e) => e.isUser) + 1
+  const userRankDelta = 1  // simulated week-over-week rank movement
 
-    return sorted.map((row, idx) => {
-      const prevRank = clamp(idx + 1 + (row.rankDelta ?? 0), 1, total)
-      return {
-        ...row,
-        rank: idx + 1,
-        prevRank,
-        diff: (row.perf ?? 0) - userReturnPct,
-      }
-    })
-  }, [friendBase, userReturnPct])
+  const userSeries = useMemo(() => buildSeries('me', userReturn), [userReturn])
 
-  const leaderboardMap = useMemo(() => {
-    const map = {}
-    leaderboard.forEach((row) => { if (!row.isYou) map[row.id] = row })
-    return map
-  }, [leaderboard])
-
-  const youRow = leaderboard.find((r) => r.isYou)
-  const aheadCount = leaderboard.filter((r) => !r.isYou && (r.diff ?? 0) > 0).length
-  const behindCount = leaderboard.filter((r) => !r.isYou && (r.diff ?? 0) <= 0).length
-  const topFriend = leaderboard.find((r) => !r.isYou)
-  const biggestMover = [...leaderboard.filter((r) => !r.isYou)].sort((a, b) => (b.rankDelta ?? 0) - (a.rankDelta ?? 0))[0]
-
-  const feed = useMemo(() => {
-    const base = onlyBig ? friendBase.filter((f) => f.amount >= 200) : friendBase
-    return base.map((f) => {
-      const row = leaderboardMap[f.id]
-      return {
-        ...f,
-        perf: row?.perf ?? f.returnPct,
-        diff: row?.diff ?? (f.returnPct - userReturnPct),
-        rank: row?.rank,
-        prevRank: row?.prevRank,
-      }
-    })
-  }, [onlyBig, friendBase, leaderboardMap, userReturnPct])
-
-  const openFriend = (friend) => {
-    const row = leaderboardMap[friend.id]
-    const perf = row?.perf ?? friend.returnPct
-    setFriendModal({
-      ...friend,
-      perf,
-      diff: row?.diff ?? perf - userReturnPct,
-      rank: row?.rank,
-      prevRank: row?.prevRank,
-      chart: buildSeries(friend.id, perf),
-      youSeries: buildSeries('you', userReturnPct),
-      total: leaderboard.length,
-    })
+  const handleRowClick = (friend) => {
+    playTapSound()
+    onOpenFriend?.({ friend, userReturn, userSeries })
   }
 
-  useEffect(() => {
-    if (!friendModal) return
-    playModalTone()
-  }, [friendModal])
-
-  // build a simple donut path from weights
-  const donut = (weights = []) => {
-    const total = weights.reduce((s, w) => s + w.weight, 0) || 1
-    let acc = 0
-    return weights.map((w) => {
-      const pct = w.weight / total
-      const start = acc * Math.PI * 2
-      acc += pct
-      const end = acc * Math.PI * 2
-      const large = end - start > Math.PI ? 1 : 0
-      const r = 26
-      const sx = 30 + r * Math.cos(start)
-      const sy = 30 + r * Math.sin(start)
-      const ex = 30 + r * Math.cos(end)
-      const ey = 30 + r * Math.sin(end)
-      return { d: `M ${sx} ${sy} A ${r} ${r} 0 ${large} 1 ${ex} ${ey}`, pct: (pct * 100).toFixed(0), ticker: w.ticker }
-    })
-  }
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '0 20px 20px' }}>
-      {/* Hero */}
-      <div style={{
-        position: 'relative', overflow: 'hidden', borderRadius: 16,
-        padding: '16px 16px 18px', marginTop: 14,
-        background: 'linear-gradient(135deg, rgba(99,102,241,0.18), rgba(16,185,129,0.16))',
-        border: '1px solid var(--border)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: 12,
-            background: 'rgba(99,102,241,0.2)', color: '#7c3aed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 10px 24px rgba(99,102,241,0.22)',
-          }}>
-            <Users size={18} />
-          </div>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.02em' }}>Friends room</div>
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Watch swipes live. Chase the crown.</div>
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => setTab('feed')}
-              style={{
-                border: 'none', borderRadius: 999,
-                padding: '6px 10px', cursor: 'pointer',
-                background: tab === 'feed' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.12)',
-                color: tab === 'feed' ? '#0f172a' : 'var(--text-primary)',
-                fontSize: 12, fontWeight: 700,
-              }}
-            >Feed</button>
-            <button
-              onClick={() => setTab('board')}
-              style={{
-                border: 'none', borderRadius: 999,
-                padding: '6px 10px', cursor: 'pointer',
-                background: tab === 'board' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.12)',
-                color: tab === 'board' ? '#0f172a' : 'var(--text-primary)',
-                fontSize: 12, fontWeight: 700,
-              }}
-            >Ranks</button>
-          </div>
+    <div style={{ height: '100%', overflowY: 'auto', padding: '16px 16px 32px' }}>
+
+        {/* Section header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          marginBottom: 14,
+        }}>
+          <Trophy size={16} color="#f7b733" />
+          <span style={{
+            fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+            textTransform: 'uppercase', fontFamily: 'var(--font-mono)',
+            color: 'var(--text-secondary)',
+          }}>Friend Leaderboard</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(16,185,129,0.16)', color: '#10b981', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-            <Sparkle size={14} /> {FRIEND_FEED.length} live swipes
-          </div>
-          <button
-            onClick={() => setOnlyBig((v) => !v)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: onlyBig ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.12)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 999, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
-          >
-            <Filter size={14} /> {onlyBig ? '≥ $200 swipes' : 'All sizes'}
-          </button>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,215,0,0.18)', color: '#f7b733', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-            <Crown size={14} /> Top friend: {topFriend?.user ?? '—'}
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(79,172,254,0.15)', color: '#4facfe', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-            <Trophy size={14} /> Rank {youRow?.rank ?? '—'} / {leaderboard.length} · prev #{youRow?.prevRank ?? '—'}
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(16,185,129,0.14)', color: 'var(--accent-green)', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-            <Users size={14} /> Ahead {aheadCount} · Behind {behindCount}
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,71,87,0.12)', color: 'var(--accent-red)', padding: '6px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-            <LineChart size={14} /> You: {userReturnPct.toFixed(1)}%
-          </div>
+
+        {/* Your rank card */}
+        <YourRankCard
+          rank={userRank}
+          total={ranked.length}
+          returnPct={userReturn}
+          weekDelta={userRankDelta}
+        />
+
+        {/* Ranked list */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {ranked.map((entry, i) => (
+            <LeaderboardRow
+              key={entry.id}
+              entry={entry}
+              rank={i + 1}
+              isUser={entry.isUser}
+              index={i}
+              onClick={handleRowClick}
+            />
+          ))}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span>Rank change: #{youRow?.prevRank ?? '—'} → #{youRow?.rank ?? '—'}</span>
-          {biggestMover && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <ArrowUpRight size={12} color="var(--accent-green)" /> Biggest mover: {biggestMover.user} ({biggestMover.rankDelta > 0 ? `+${biggestMover.rankDelta}` : `${biggestMover.rankDelta}`} places)
-            </span>
-          )}
+
+        {/* Footer nudge */}
+        <div style={{
+          marginTop: 20, textAlign: 'center',
+          fontSize: 11, color: 'var(--text-tertiary)',
+          fontFamily: 'var(--font-mono)',
+        }}>
+          tap a friend to see their portfolio
         </div>
-      </div>
 
-      {/* Body */}
-      <AnimatePresence mode="wait">
-        {tab === 'feed' ? (
-          <motion.div key="feed" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 8px' }}>
-              <Shuffle size={14} color="var(--text-tertiary)" />
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>Tap cards to peek notes</span>
-            </div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {feed.map((item, idx) => {
-                const diff = item.diff ?? (item.perf - userReturnPct)
-                const ahead = diff <= 0
-                const delta = Math.abs(diff).toFixed(1)
-                return (
-                  <motion.div key={item.id} layout>
-                    <FeedCard item={item} idx={idx} onOpen={(itm) => openFriend(itm)} />
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, paddingLeft: 4, paddingRight: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {ahead ? <TrendingUp size={14} color="var(--accent-green)" /> : <TrendingDown size={14} color="var(--accent-red)" />}
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {ahead ? `You’re ahead by ${delta}%` : `Behind by ${delta}%`}
-                        </span>
-                      </div>
-                    </div>
-                    <AnimatePresence>
-                      {ahead ? (
-                        <motion.div
-                          key="win"
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1.02 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.4, repeat: 1, repeatType: 'reverse' }}
-                          style={{ height: 4, background: 'linear-gradient(90deg, #10b981, #4ade80)', borderRadius: 999, marginTop: 6 }}
-                        />
-                      ) : (
-                        <motion.div
-                          key="lose"
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.35 }}
-                          style={{ height: 4, background: 'linear-gradient(90deg, #f87171, #ef4444)', borderRadius: 999, marginTop: 6 }}
-                        />
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div key="board" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.18 }}>
-            <div style={{
-              marginTop: 16, marginBottom: 10,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <Trophy size={16} color="var(--accent-gold, #f7b733)" />
-              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>Performance leaderboard</div>
-            </div>
-            {youRow && (
-              <div style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '12px 14px',
-                marginBottom: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {(youRow.prevRank ?? youRow.rank) > youRow.rank ? <ArrowUpRight size={16} color="var(--accent-green)" /> : <ArrowDownRight size={16} color="var(--accent-red)" />}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>You jumped to #{youRow.rank}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                      Last week #{youRow.prevRank ?? '—'} · goal: top 3
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginLeft: 'auto', width: 120, height: 6, background: 'var(--bg-card)', borderRadius: 999, overflow: 'hidden' }}>
-                  <div style={{ width: `${(youRow.rank / leaderboard.length) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #4facfe, #10b981)', borderRadius: 999 }} />
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 20 }}>
-              {leaderboard.map((row) => (
-                <LeaderboardRow key={row.id} row={row} onOpen={openFriend} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {friendModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed', inset: 0, zIndex: 2000,
-              background: 'rgba(0,0,0,0.6)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 16,
-            }}
-            onClick={() => setFriendModal(null)}
-          >
-            <motion.div
-              onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-              style={{
-                width: '100%', maxWidth: 340,
-                background: 'var(--bg-card)',
-                borderRadius: 16,
-                border: '1px solid var(--border)',
-                padding: 16,
-                boxShadow: '0 20px 50px rgba(0,0,0,0.35)',
-              }}
-            >
-              {(() => {
-                const diff = friendModal.diff ?? (friendModal.perf - userReturnPct)
-                const ahead = diff > 0
-                const gap = Math.abs(diff).toFixed(1)
-                return (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                      <img src={friendModal.photo} alt={friendModal.user} style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover' }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 16, fontWeight: 700 }}>{friendModal.user}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span>{friendModal.perf?.toFixed(1)}% return</span>
-                          {friendModal.rank && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f7b733', fontWeight: 700 }}>
-                              <Crown size={12} /> #{friendModal.rank} / {friendModal.total}
-                            </span>
-                          )}
-                        </div>
-                        {friendModal.prevRank && (
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                            last week #{friendModal.prevRank} · moved {friendModal.prevRank > (friendModal.rank ?? friendModal.prevRank) ? 'up' : 'down'}
-                          </div>
-                        )}
-                      </div>
-                      <button onClick={() => setFriendModal(null)} style={{ border: 'none', background: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
-                        <X size={18} />
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>Their 30d curve</div>
-                        <div style={{ height: 120 }}>
-                          <MiniChart data={friendModal.chart} positive={(friendModal.perf ?? 0) >= 0} />
-                        </div>
-                      </div>
-                      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>Your 30d curve</div>
-                        <div style={{ height: 120 }}>
-                          <MiniChart data={friendModal.youSeries} positive={userReturnPct >= 0} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 10, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Performance vs you</div>
-                        <div style={{ fontSize: 12, color: ahead ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 700 }}>
-                          {ahead ? `They’re up ${gap}% on you` : `You’re up ${gap}% on them`}
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 8, height: 8, background: 'var(--bg-card)', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
-                        <div style={{
-                          position: 'absolute',
-                          left: '50%',
-                          top: 0,
-                          bottom: 0,
-                          width: '1px',
-                          background: 'var(--border)',
-                        }} />
-                        <div style={{
-                          position: 'absolute',
-                          left: ahead ? '50%' : `${50 - Math.min(45, gap * 4)}%`,
-                          right: ahead ? `${50 - Math.min(45, gap * 4)}%` : '50%',
-                          background: ahead ? 'linear-gradient(90deg, #f87171, #ef4444)' : 'linear-gradient(90deg, #10b981, #34d399)',
-                          height: '100%',
-                        }} />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
-                      {[{ title: 'Friend allocation', data: friendModal.portfolio, color: '#7c3aed' },
-                        { title: 'Your allocation', data: holdings.map(h => ({ ticker: h.ticker, weight: userTotals.value ? (h.amount / userTotals.value) * 100 : 0 })), color: '#10b981' }].map((chart, i) => {
-                        const arcs = donut(chart.data)
-                        return (
-                          <div key={i} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>{chart.title}</div>
-                            <svg width="60" height="60" viewBox="0 0 60 60">
-                              <circle cx="30" cy="30" r="26" fill="none" stroke="var(--border)" strokeWidth="10" />
-                              {arcs.map((a, idx) => (
-                                <path key={idx} d={a.d} stroke={chart.color} strokeWidth="10" fill="none" strokeLinecap="round" />
-                              ))}
-                            </svg>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 6 }}>Top stocks head-to-head</div>
-                      {friendModal.portfolio.slice(0, 4).map((p) => {
-                        const yours = holdings.find((h) => h.ticker === p.ticker)
-                        const youW = yours ? ((yours.amount / (userTotals.value || 1)) * 100).toFixed(1) : '0.0'
-                        return (
-                          <div key={p.ticker} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px', marginBottom: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{p.ticker}</div>
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 700 }}>{p.ticker}</div>
-                                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{p.weight}% them · {youW}% you</div>
-                              </div>
-                            </div>
-                            <div style={{ fontSize: 12, color: parseFloat(p.weight) > parseFloat(youW) ? 'var(--accent-red)' : 'var(--accent-green)' }}>
-                              {parseFloat(p.weight) > parseFloat(youW) ? 'They’re heavier' : 'You’re heavier'}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                      {[
-                        { label: 'Now', value: friendModal.rank ?? '—' },
-                        { label: 'Last week', value: friendModal.prevRank ?? '—' },
-                        { label: 'Stretch goal', value: 3 },
-                      ].map((chip, i) => (
-                        <div key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 10px', fontSize: 11 }}>
-                          <span style={{ color: 'var(--text-tertiary)' }}>{chip.label}</span>
-                          <span style={{ fontWeight: 800, color: '#4facfe' }}>#{chip.value}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <motion.div
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      style={{
-                        marginTop: 10,
-                        fontSize: 12,
-                        color: 'var(--text-secondary)',
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px dashed var(--border)',
-                        borderRadius: 10,
-                        padding: '8px 10px',
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {ahead
-                        ? `🥵 ${friendModal.user} is roasting you. They’re up ${gap}% — maybe nudge your laggards?`
-                        : `🚀 You’re ahead by ${gap}%. ${friendModal.user} asked for your watchlist link.`}
-                      <div style={{ marginTop: 6, color: 'var(--text-tertiary)' }}>
-                        {ahead ? 'Small addition: I set a reminder to check back Sunday night.' : 'Small addition: screenshot saved to brag in the chat.'}
-                      </div>
-                    </motion.div>
-                  </>
-                )
-              })()}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

@@ -1,5 +1,40 @@
 // Web Audio API sound generators — no audio files needed
 
+export function playDiamondSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // Crystalline high chime: E6 → B6 → E7
+    ;[1318.5, 1975.5, 2637].forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const t = ctx.currentTime + i * 0.11
+      gain.gain.setValueAtTime(0.001, t)
+      gain.gain.linearRampToValueAtTime(0.15, t + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45)
+      osc.start(t); osc.stop(t + 0.5)
+    })
+  } catch (_) {}
+}
+
+export function playPaperSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    // Soft crinkle: short noise burst + descending tone
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(280, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.18)
+    gain.gain.setValueAtTime(0.08, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2)
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.22)
+  } catch (_) {}
+}
+
 export function playBuySound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()

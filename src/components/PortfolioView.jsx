@@ -1,6 +1,7 @@
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
-import { TrendingUp, TrendingDown, DollarSign, ChevronsLeft, ChevronsRight, Award } from 'lucide-react'
+import { DollarSign, ChevronsLeft, ChevronsRight, Award } from 'lucide-react'
 import { useStockData } from '../hooks/useStockData'
+import { playDiamondSound, playPaperSound } from '../utils/sounds'
 
 const SWIPE_THRESHOLD = 72
 
@@ -12,6 +13,7 @@ function HoldingRow({ holding, index, onAction }) {
   const dailyChangePct = liveChangePct ?? stock.changePct
   const isUp           = dailyChangePct >= 0
   const isDiamond      = dailyChangePct <= -20
+  const isPaper        = dailyChangePct >= 15
 
   const shares       = amount / currentPrice
   const currentValue = shares * currentPrice
@@ -168,15 +170,52 @@ function HoldingRow({ holding, index, onAction }) {
             </span>
           </div>
           {isDiamond && (
-            <div style={{
-              marginTop: 4,
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '4px 8px', borderRadius: 999,
-              background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
-              fontSize: 11, fontWeight: 700, color: '#60a5fa',
-            }}>
-              💎 Diamond hands
-            </div>
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.2 }}
+              onClick={() => playDiamondSound()}
+              style={{
+                marginTop: 4,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 8px', borderRadius: 999,
+                background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
+                fontSize: 11, fontWeight: 700, color: '#60a5fa',
+                cursor: 'pointer',
+              }}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+            >
+              <motion.span
+                animate={{ rotate: [0, -12, 12, -6, 6, 0] }}
+                transition={{ duration: 1.2, repeat: Infinity, repeatDelay: 3 }}
+              >💎</motion.span>
+              Diamond hands
+            </motion.div>
+          )}
+          {isPaper && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.2 }}
+              onClick={() => playPaperSound()}
+              style={{
+                marginTop: 4,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 8px', borderRadius: 999,
+                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                fontSize: 11, fontWeight: 700, color: 'var(--accent-red)',
+                cursor: 'pointer',
+              }}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+            >
+              <motion.span
+                animate={{ rotate: [0, 5, -5, 3, -3, 0] }}
+                transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 4 }}
+              >🧻</motion.span>
+              Don't paper hand it
+            </motion.div>
           )}
         </div>
       </motion.div>
@@ -270,18 +309,31 @@ export default function PortfolioView({ holdings, badges = [], onHoldingAction }
           across {stockCount} {stockCount === 1 ? 'stock' : 'stocks'}
         </div>
         {diamondCount > 0 && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            marginTop: 8,
-            padding: '6px 10px',
-            borderRadius: 999,
-            background: 'rgba(59,130,246,0.12)',
-            border: '1px solid rgba(59,130,246,0.25)',
-            color: '#60a5fa',
-            fontSize: 12, fontWeight: 700,
-          }}>
-            💎 {diamondCount} diamond hand{diamondCount > 1 ? 's' : ''}
-          </div>
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 20 }}
+            onClick={() => playDiamondSound()}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              marginTop: 8,
+              padding: '6px 10px',
+              borderRadius: 999,
+              background: 'rgba(59,130,246,0.12)',
+              border: '1px solid rgba(59,130,246,0.25)',
+              color: '#60a5fa',
+              fontSize: 12, fontWeight: 700,
+              cursor: 'pointer',
+            }}
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.94 }}
+          >
+            <motion.span
+              animate={{ y: [0, -3, 0], rotate: [0, -8, 8, 0] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 2 }}
+            >💎</motion.span>
+            {diamondCount} diamond hand{diamondCount > 1 ? 's' : ''}
+          </motion.div>
         )}
 
         {/* Diversification ring */}

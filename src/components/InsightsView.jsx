@@ -452,7 +452,7 @@ export default function InsightsView({ holdings, onRecommendationBuy = () => {} 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dismissedRecs, setDismissedRecs] = useState(new Set())
-  const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+  const API_BASE = '/api'
 
   const totalInvested = holdings.reduce((s, h) => s + h.amount, 0)
   const sectorTotals = {}
@@ -532,12 +532,8 @@ export default function InsightsView({ holdings, onRecommendationBuy = () => {} 
         })),
       }
 
-      const bases = [API_BASE]
-      if (API_BASE === '/api') bases.push('http://localhost:3001/api')
-
-      for (const base of bases) {
-        try {
-          const res = await fetch(`${base}/insights`, {
+      try {
+          const res = await fetch(`${API_BASE}/insights`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -550,18 +546,17 @@ export default function InsightsView({ holdings, onRecommendationBuy = () => {} 
           }
           return
         } catch {
-          if (base === bases.at(-1) && !cancelled) {
+          if (!cancelled) {
             setAnalysis(buildMock(payload))
             setLoading(false)
             setError(null)
           }
         }
-      }
     }
 
     load()
     return () => { cancelled = true }
-  }, [holdingsKey, API_BASE, available.length])
+  }, [holdingsKey, available.length])
 
   if (holdings.length === 0) {
     return (

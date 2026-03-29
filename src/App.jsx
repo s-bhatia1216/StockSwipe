@@ -6,7 +6,7 @@ import ReelsView from './components/ReelsView'
 import InsightsView from './components/InsightsView'
 import StockDetailModal from './components/StockDetailModal'
 import SectorPicker from './components/SectorPicker'
-import FriendsFeed from './components/FriendsFeed'
+import FriendsFeed, { FriendModal } from './components/FriendsFeed'
 import { Compass, Briefcase, Clapperboard, Sparkles, Users, Flame } from 'lucide-react'
 import { STOCKS } from './data/stocks'
 
@@ -159,6 +159,7 @@ export default function App() {
 
   // Portfolio detail modal
   const [detailModal, setDetailModal] = useState(null) // { ticker, mode: 'buy'|'sell' }
+  const [friendModal, setFriendModal] = useState(null) // { friend, userReturn, userSeries }
 
   const handleHoldingAction = (ticker, mode) => {
     setDetailModal({ ticker, mode })
@@ -316,17 +317,8 @@ export default function App() {
               fontFamily: 'var(--font-mono)',
             }}>
               <Flame size={14} />
-              {streak.current}-day streak
+              7-day streak
             </div>
-            <div style={{ flex: 1, height: 6, background: 'var(--bg-surface)', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{
-                width: `${Math.min(100, (streak.current / 7) * 100)}%`,
-                height: '100%',
-                background: 'linear-gradient(90deg, #fb923c, #facc15)',
-                transition: 'width 0.3s',
-              }} />
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>7d goal</span>
           </div>
         </div>
 
@@ -472,7 +464,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               style={{ width: '100%', height: '100%' }}
             >
-              <FriendsFeed holdings={holdings} />
+              <FriendsFeed holdings={holdings} onOpenFriend={setFriendModal} />
             </motion.div>
           ) : (
             <PortfolioView
@@ -489,6 +481,19 @@ export default function App() {
       <AnimatePresence>
         {selectedSectors === null && (
           <SectorPicker key="sector-picker" onConfirm={handleSectorConfirm} />
+        )}
+      </AnimatePresence>
+
+      {/* Friend profile modal — rendered at phone-container level to cover header */}
+      <AnimatePresence>
+        {friendModal && (
+          <FriendModal
+            key={friendModal.friend.id}
+            friend={friendModal.friend}
+            userReturn={friendModal.userReturn}
+            userSeries={friendModal.userSeries}
+            onClose={() => setFriendModal(null)}
+          />
         )}
       </AnimatePresence>
 

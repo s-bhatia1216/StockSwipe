@@ -12,6 +12,8 @@ export const FRIEND_FEED = [
     returnPct: 19.2,
     rankDelta: 1,
     vibe: 'up only',
+    streak: 14,
+    hand: 'diamond',
     portfolio: [
       { ticker: 'NVDA', weight: 38 },
       { ticker: 'MSFT', weight: 24 },
@@ -32,6 +34,8 @@ export const FRIEND_FEED = [
     returnPct: 12.4,
     rankDelta: -1,
     vibe: 'steady',
+    streak: 7,
+    hand: 'diamond',
     portfolio: [
       { ticker: 'LLY', weight: 42 },
       { ticker: 'COST', weight: 22 },
@@ -52,6 +56,8 @@ export const FRIEND_FEED = [
     returnPct: 9.6,
     rankDelta: 2,
     vibe: 'momentum',
+    streak: 5,
+    hand: 'diamond',
     portfolio: [
       { ticker: 'PLTR', weight: 46 },
       { ticker: 'AMD', weight: 20 },
@@ -72,6 +78,8 @@ export const FRIEND_FEED = [
     returnPct: 6.3,
     rankDelta: -1,
     vibe: 'drift',
+    streak: 2,
+    hand: 'paper',
     portfolio: [
       { ticker: 'AMZN', weight: 50 },
       { ticker: 'NVDA', weight: 18 },
@@ -92,6 +100,8 @@ export const FRIEND_FEED = [
     returnPct: 7.8,
     rankDelta: 0,
     vibe: 'steady',
+    streak: 9,
+    hand: 'diamond',
     portfolio: [
       { ticker: 'COST', weight: 48 },
       { ticker: 'LLY', weight: 22 },
@@ -112,6 +122,8 @@ export const FRIEND_FEED = [
     returnPct: 3.1,
     rankDelta: -2,
     vibe: 'cooldown',
+    streak: 1,
+    hand: 'paper',
     portfolio: [
       { ticker: 'MSFT', weight: 44 },
       { ticker: 'NVDA', weight: 28 },
@@ -132,6 +144,8 @@ export const FRIEND_FEED = [
     returnPct: -2.4,
     rankDelta: 1,
     vibe: 'retooling',
+    streak: 3,
+    hand: 'paper',
     portfolio: [
       { ticker: 'AMD', weight: 52 },
       { ticker: 'NVDA', weight: 22 },
