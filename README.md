@@ -51,8 +51,23 @@ npm run dev
 - Claude Sonnet analyzes your full portfolio
 - Letter grade (A–D) with punchy headline and 2-sentence assessment
 - Animated sector concentration bars
+- Risk radar (concentration / volatility / correlation) with AI explanation
 - Strengths and risk flags
 - 3 Claude-recommended stocks tailored to fill your portfolio gaps
+
+## Contributions (shipped only)
+
+### Sonal
+- Smart deck ordering in Discover (swipe-history-based ranking)
+- AI Portfolio Insights tab
+- Risk radar in AI Insights
+- "Why this stock?" hook generation
+- Ask Claude search bar on card back (question input + answer bubble)
+
+### Yash
+- Friends feed + leaderboard
+- Diversification donut chart in Portfolio
+- Streaks + badges
 
 ## Tech stack
 

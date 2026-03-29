@@ -16,7 +16,7 @@
 
 ## Feature status
 
-### ✅ Shipped
+### Shipped
 
 | Feature | What it does | Notes |
 |---------|-------------|-------|
@@ -35,47 +35,45 @@
 | **30 stocks** | Full roster across 5 sectors: Tech, Healthcare, Fintech, EV/Energy, Consumer | |
 | **Reels view** | TikTok-style vertical stock shorts. Buy chip opens StockDetailModal directly | |
 | **AI Insights tab** | Claude Sonnet analyzes holdings → letter grade, headline, 2-sentence summary, sector allocation bars, strengths/risks, 3 Claude-recommended stocks with reasons | `/api/insights` POST |
+| **Risk radar** | Spider chart scoring concentration, volatility (beta-weighted), and correlation with a Claude explanation line | Insights tab |
 | **"Why this stock?" hook** | Claude Haiku generates a ≤10-word punchy hook above each card. Skeleton loading, 20-min server cache, module-level client cache. | `/api/hook/:ticker` |
 | **Trade confirmation animation** | After buy/sell, action panel shows spring-animated checkmark + "Invested $X.XX" / "Sold $X.XX" + share count. Auto-closes after 2s. | StockDetailModal |
 | **Ask Claude bar** | iOS-style rounded input at the bottom of the card back. User types any question about the stock; Claude Haiku answers in 1–3 plain-English sentences in a purple bubble. | `POST /api/ask` |
+| **Smart deck ordering** | Discover feed re-ranks remaining cards from swipe history by learned sector/style preferences | `App.jsx` ranking model |
 
 ---
 
-### 🟡 High impact if time allows
+### High impact if time allows
 
 | # | Feature | Why it matters |
 |---|---------|----------------|
 | 2 | **Live Claude card analysis** | Replace static bull/bear text with live Claude generation per card flip. The "it's actually live AI" moment. |
-| 3 | **Smart deck ordering** | Reorder the deck based on swipe history. "The AI learns you" = strong demo narrative. |
 | 4 | **Undo / rewind** | Bring back last skipped card. Shows product polish. |
 
 ---
 
-### 🔵 Cherry on top
+### Cherry on top
 
 | # | Feature | Why it matters |
 |---|---------|----------------|
 | 5 | **Voice mode** | Hold card → ask Claude a follow-up by voice. Judges remember wild demo moments. |
-| 6 | **Risk radar** | Spider chart of concentration/volatility/correlation. Beautiful viz + AI explanation = Track 1 gold. |
 | 7 | **Social leaderboard** | Most-swiped stocks among attendees. Easy to seed with fake data. Viral layer. |
 
 ---
 
-## Work split
+## Contributions (shipped only)
 
 ### Sonal
-- Live Claude card analysis
 - Smart deck ordering
-- Voice mode (if time)
+- AI Portfolio Insights tab
+- Risk radar
+- "Why this stock?" hook
+- Ask Claude search bar (card-back Q&A input + responses)
 
 ### Yash
-- Trade[XYZ] mock/integration
 - Friends feed / leaderboard
-- Stock debates (bull vs bear comments)
 - Diversification donut chart
 - Streaks + badges
-- Risk radar (if time)
-- Social leaderboard (if time)
 
 ---
 

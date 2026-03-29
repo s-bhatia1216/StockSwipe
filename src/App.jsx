@@ -16,6 +16,7 @@ const STORAGE_SKIPPED   = 'stockswipe_skipped'
 const STORAGE_AMOUNT    = 'stockswipe_amount'
 const STORAGE_BADGES    = 'stockswipe_badges'
 const STORAGE_STREAK    = 'stockswipe_streak'
+const STORAGE_PROFILE   = 'stockswipe_swipe_profile'
 
 function loadStorage(key, fallback) {
   try {
@@ -23,6 +24,32 @@ function loadStorage(key, fallback) {
     if (raw !== null) return JSON.parse(raw)
   } catch {}
   return fallback
+}
+
+function parseBeta(stock) {
+  const raw = stock?.metrics?.beta
+  if (raw == null) return null
+  const num = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(num) ? num : null
+}
+
+function affinityFromCounts(counts) {
+  const right = counts?.right ?? 0
+  const left = counts?.left ?? 0
+  const total = right + left
+  if (total === 0) return 0
+  const bias = (right - left) / total
+  const confidence = Math.min(1, total / 6)
+  return bias * confidence
+}
+
+function scoreStockForProfile(stock, profile) {
+  const sectorAffinity = affinityFromCounts(profile?.sectors?.[stock.sectorId])
+  const beta = parseBeta(stock)
+  const styleKey = beta != null && beta >= 1.2 ? 'highVol' : 'defensive'
+  const styleAffinity = affinityFromCounts(profile?.styles?.[styleKey])
+  const momentum = Number.isFinite(stock.changePct) ? stock.changePct : 0
+  return sectorAffinity * 100 + styleAffinity * 38 + momentum * 1.4
 }
 
 export default function App() {
@@ -34,6 +61,13 @@ export default function App() {
   const [draftAmount, setDraftAmount]     = useState(() => String(loadStorage(STORAGE_AMOUNT, 1)))
   const [badges, setBadges] = useState(() => loadStorage(STORAGE_BADGES, []))
   const [streak, setStreak] = useState(() => loadStorage(STORAGE_STREAK, { current: 0, longest: 0, lastDate: null }))
+  const [swipeProfile, setSwipeProfile] = useState(() => loadStorage(STORAGE_PROFILE, {
+    sectors: {},
+    styles: {},
+    totalRight: 0,
+    totalLeft: 0,
+    updatedAt: null,
+  }))
 
   // Sector onboarding — null means not yet confirmed
   const [selectedSectors, setSelectedSectors] = useState(() => loadStorage(STORAGE_SECTORS, null))
@@ -53,12 +87,55 @@ export default function App() {
     (s) => !portfolioTickers.includes(s.ticker) && !skipped.includes(s.ticker)
   )
 
+  const rankedRemaining = [...remaining].sort((a, b) => {
+    const scoreDiff = scoreStockForProfile(b, swipeProfile) - scoreStockForProfile(a, swipeProfile)
+    if (Math.abs(scoreDiff) > 0.0001) return scoreDiff
+    return (b.changePct ?? 0) - (a.changePct ?? 0)
+  })
+
+  const updateSwipeProfile = (ticker, direction) => {
+    const stock = STOCKS.find((s) => s.ticker === ticker)
+    if (!stock) return
+    const isRight = direction === 'right'
+    const beta = parseBeta(stock)
+    const styleKey = beta != null && beta >= 1.2 ? 'highVol' : 'defensive'
+
+    setSwipeProfile((prev) => {
+      const sectors = { ...(prev?.sectors ?? {}) }
+      const styles = { ...(prev?.styles ?? {}) }
+
+      const prevSector = sectors[stock.sectorId] ?? { right: 0, left: 0 }
+      sectors[stock.sectorId] = {
+        right: prevSector.right + (isRight ? 1 : 0),
+        left: prevSector.left + (isRight ? 0 : 1),
+      }
+
+      const prevStyle = styles[styleKey] ?? { right: 0, left: 0 }
+      styles[styleKey] = {
+        right: prevStyle.right + (isRight ? 1 : 0),
+        left: prevStyle.left + (isRight ? 0 : 1),
+      }
+
+      const next = {
+        sectors,
+        styles,
+        totalRight: (prev?.totalRight ?? 0) + (isRight ? 1 : 0),
+        totalLeft: (prev?.totalLeft ?? 0) + (isRight ? 0 : 1),
+        updatedAt: Date.now(),
+      }
+
+      localStorage.setItem(STORAGE_PROFILE, JSON.stringify(next))
+      return next
+    })
+  }
+
   const handleSwipeRight = (ticker) => {
     setPortfolio((prev) => {
       const next = [...prev, { ticker, amount: investAmount }]
       localStorage.setItem(STORAGE_PORTFOLIO, JSON.stringify(next))
       return next
     })
+    updateSwipeProfile(ticker, 'right')
     touchStreak()
     maybeAwardBadges(ticker)
   }
@@ -69,6 +146,7 @@ export default function App() {
       localStorage.setItem(STORAGE_SKIPPED, JSON.stringify(next))
       return next
     })
+    updateSwipeProfile(ticker, 'left')
     touchStreak()
   }
 
@@ -355,7 +433,7 @@ export default function App() {
           {view === 'discover' ? (
             <SwipeView
               key="discover"
-              stocks={remaining}
+              stocks={rankedRemaining}
               onSwipeRight={handleSwipeRight}
               onSwipeLeft={handleSwipeLeft}
               portfolioCount={holdings.length}

@@ -303,6 +303,7 @@ Return exactly this JSON shape:
   "grade": "B+",
   "headline": "4-6 word punchy portfolio description",
   "summary": "2 honest sentences assessing the overall portfolio quality and risk profile.",
+  "riskRadarNote": "One sentence connecting concentration, volatility, and correlation risk in plain English.",
   "strengths": ["short strength phrase", "short strength phrase"],
   "risks": ["short risk phrase", "short risk phrase", "short risk phrase"],
   "recommendations": [

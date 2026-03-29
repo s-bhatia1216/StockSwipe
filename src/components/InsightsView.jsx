@@ -20,6 +20,247 @@ function gradeColor(grade) {
   return '#ff4757'
 }
 
+const RADAR_AXES = [
+  { key: 'concentration', label: 'Concentration' },
+  { key: 'volatility', label: 'Volatility' },
+  { key: 'correlation', label: 'Correlation' },
+]
+
+function clamp(num, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, num))
+}
+
+function parseBeta(holding) {
+  const raw = holding?.stock?.metrics?.beta
+  if (raw == null) return 1
+  const value = parseFloat(String(raw).replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(value) ? value : 1
+}
+
+function toReturns(series = []) {
+  const out = []
+  for (let i = 1; i < series.length; i++) {
+    const prev = series[i - 1]
+    const cur = series[i]
+    if (!Number.isFinite(prev) || !Number.isFinite(cur) || prev === 0) continue
+    out.push((cur - prev) / prev)
+  }
+  return out
+}
+
+function pearsonCorrelation(a = [], b = []) {
+  const n = Math.min(a.length, b.length)
+  if (n < 3) return null
+  const x = a.slice(-n)
+  const y = b.slice(-n)
+
+  let sumX = 0
+  let sumY = 0
+  let sumXY = 0
+  let sumXX = 0
+  let sumYY = 0
+
+  for (let i = 0; i < n; i++) {
+    const xi = x[i]
+    const yi = y[i]
+    sumX += xi
+    sumY += yi
+    sumXY += xi * yi
+    sumXX += xi * xi
+    sumYY += yi * yi
+  }
+
+  const numerator = n * sumXY - sumX * sumY
+  const denomA = n * sumXX - sumX * sumX
+  const denomB = n * sumYY - sumY * sumY
+  const denominator = Math.sqrt(denomA * denomB)
+  if (!Number.isFinite(denominator) || denominator <= 1e-9) return null
+  return clamp(numerator / denominator, -1, 1)
+}
+
+function buildRiskRadar(holdings, totalInvested, sectorTotals) {
+  if (!holdings.length || totalInvested <= 0) {
+    return { concentration: 0, volatility: 0, correlation: 0 }
+  }
+
+  const sectorAmounts = Object.values(sectorTotals)
+  const maxSectorShare = Math.max(...sectorAmounts) / totalInvested
+  const hhi = sectorAmounts.reduce((sum, amt) => {
+    const share = amt / totalInvested
+    return sum + share * share
+  }, 0)
+  const hhiMin = 1 / Math.max(1, sectorAmounts.length)
+  const hhiNorm = sectorAmounts.length > 1 ? (hhi - hhiMin) / (1 - hhiMin) : 1
+  const concentration = clamp((maxSectorShare * 0.65 + hhiNorm * 0.35) * 100)
+
+  const weightedBeta = holdings.reduce((sum, h) => {
+    const w = h.amount / totalInvested
+    return sum + w * parseBeta(h)
+  }, 0)
+  const volatility = clamp(((weightedBeta - 0.7) / 1.1) * 100)
+
+  let pairSum = 0
+  let pairCount = 0
+  for (let i = 0; i < holdings.length; i++) {
+    for (let j = i + 1; j < holdings.length; j++) {
+      const left = holdings[i]
+      const right = holdings[j]
+      const leftReturns = toReturns(left.stock?.chartData ?? [])
+      const rightReturns = toReturns(right.stock?.chartData ?? [])
+      const corr = pearsonCorrelation(leftReturns, rightReturns)
+      const fallback = left.stock?.sectorId === right.stock?.sectorId ? 0.85 : 0.35
+      pairSum += Math.max(0, Number.isFinite(corr) ? corr : fallback)
+      pairCount++
+    }
+  }
+  const correlation = holdings.length === 1
+    ? 100
+    : pairCount > 0
+      ? clamp((pairSum / pairCount) * 100)
+      : 50
+
+  return { concentration, volatility, correlation }
+}
+
+function defaultRiskRadarNote(radar) {
+  const ranked = [...RADAR_AXES]
+    .map((axis) => ({ axis: axis.key, value: radar[axis.key] ?? 0 }))
+    .sort((a, b) => b.value - a.value)
+  const top = ranked[0]?.axis
+  if (top === 'concentration') {
+    return 'Concentration is your biggest risk right now; adding sector variety lowers single-theme drawdowns.'
+  }
+  if (top === 'volatility') {
+    return 'Volatility is the main pressure point; mix in lower-beta names to smooth portfolio swings.'
+  }
+  return 'Correlation is elevated, so holdings may move together during market shocks.'
+}
+
+function polygonPoint(axisIndex, value, center, radius) {
+  const angle = (-90 + axisIndex * 120) * (Math.PI / 180)
+  const r = (clamp(value) / 100) * radius
+  return {
+    x: center + Math.cos(angle) * r,
+    y: center + Math.sin(angle) * r,
+  }
+}
+
+function RiskRadarCard({ radar, note }) {
+  const size = 196
+  const center = size / 2
+  const radius = 72
+
+  const dataPoints = RADAR_AXES.map((axis, idx) =>
+    polygonPoint(idx, radar[axis.key] ?? 0, center, radius)
+  )
+  const dataPolygon = dataPoints.map((p) => `${p.x},${p.y}`).join(' ')
+  const labelPoints = RADAR_AXES.map((axis, idx) => {
+    const point = polygonPoint(idx, 100, center, radius + 18)
+    const textAnchor = idx === 0 ? 'middle' : idx === 1 ? 'start' : 'end'
+    return { ...axis, ...point, textAnchor }
+  })
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: 0.14 }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 20,
+        padding: '16px 20px',
+        marginBottom: 12,
+      }}
+    >
+      <p style={{
+        fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)',
+        letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14,
+      }}>
+        Risk Radar
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {[0.25, 0.5, 0.75, 1].map((level) => {
+              const points = RADAR_AXES.map((_, idx) => {
+                const p = polygonPoint(idx, level * 100, center, radius)
+                return `${p.x},${p.y}`
+              }).join(' ')
+              return (
+                <polygon
+                  key={level}
+                  points={points}
+                  fill="none"
+                  stroke="var(--border)"
+                  strokeWidth="1"
+                  opacity={0.55}
+                />
+              )
+            })}
+
+            {RADAR_AXES.map((_, idx) => {
+              const p = polygonPoint(idx, 100, center, radius)
+              return (
+                <line
+                  key={idx}
+                  x1={center}
+                  y1={center}
+                  x2={p.x}
+                  y2={p.y}
+                  stroke="var(--border)"
+                  strokeWidth="1"
+                  opacity={0.45}
+                />
+              )
+            })}
+
+            {labelPoints.map((label) => (
+              <text
+                key={label.key}
+                x={label.x}
+                y={label.y}
+                textAnchor={label.textAnchor}
+                dominantBaseline="middle"
+                fill="var(--text-tertiary)"
+                fontSize="10"
+                fontWeight="700"
+                style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}
+              >
+                {label.label}
+              </text>
+            ))}
+
+            <polygon
+              points={dataPolygon}
+              fill="rgba(79,172,254,0.26)"
+              stroke="#4facfe"
+              strokeWidth="2"
+            />
+            {dataPoints.map((p, idx) => (
+              <circle key={idx} cx={p.x} cy={p.y} r="3.6" fill="#4facfe" />
+            ))}
+          </svg>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {RADAR_AXES.map((axis) => (
+            <div key={axis.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{axis.label}</span>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#4facfe', fontWeight: 700 }}>
+                {(radar[axis.key] ?? 0).toFixed(0)}
+              </span>
+            </div>
+          ))}
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4 }}>
+            {note}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function InsightsView({ holdings }) {
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading]   = useState(false)
@@ -35,6 +276,11 @@ export default function InsightsView({ holdings }) {
   const sectorBars = Object.entries(sectorTotals)
     .sort((a, b) => b[1] - a[1])
     .map(([id, amt]) => ({ id, pct: (amt / totalInvested) * 100, color: SECTOR_COLORS[id] ?? '#8b8b9e' }))
+  const riskRadar = buildRiskRadar(holdings, totalInvested, sectorTotals)
+  const holdingsKey = holdings
+    .map((h) => `${h.ticker}:${h.amount.toFixed(2)}`)
+    .sort()
+    .join('|')
 
   // Available stocks not in portfolio
   const heldTickers = new Set(holdings.map(h => h.ticker))
@@ -68,7 +314,7 @@ export default function InsightsView({ holdings }) {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(data => { setAnalysis(data); setLoading(false) })
       .catch(err => { setError(err.message); setLoading(false) })
-  }, [holdings.length])
+  }, [holdingsKey])
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   if (holdings.length === 0) {
@@ -249,11 +495,16 @@ export default function InsightsView({ holdings }) {
         </div>
       </motion.div>
 
+      <RiskRadarCard
+        radar={riskRadar}
+        note={analysis.riskRadarNote ?? defaultRiskRadarNote(riskRadar)}
+      />
+
       {/* Strengths + Risks */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.16 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
         style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr',
           gap: 10, marginBottom: 12,
@@ -302,7 +553,7 @@ export default function InsightsView({ holdings }) {
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.24 }}
+        transition={{ duration: 0.4, delay: 0.28 }}
       >
         <p style={{
           fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)',

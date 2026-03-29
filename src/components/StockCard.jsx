@@ -483,6 +483,66 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
             </div>
           </div>
 
+          {/* ── Ask Claude bar ── */}
+          <div style={{ marginTop: 16 }} onClick={e => e.stopPropagation()}>
+            {/* Answer bubble */}
+            {(answer || askLoading) && (
+              <div style={{
+                background: 'var(--accent-purple-dim)',
+                border: '1px solid rgba(139,92,246,0.2)',
+                borderRadius: 14,
+                padding: '10px 12px',
+                marginBottom: 8,
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                lineHeight: 1.55,
+                minHeight: 40,
+              }}>
+                {askLoading
+                  ? <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.1, repeat: Infinity }}>Thinking…</motion.span>
+                  : answer}
+              </div>
+            )}
+
+            {/* iOS-style input */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--bg-surface)',
+              borderRadius: 22,
+              padding: '6px 6px 6px 14px',
+              border: '1px solid var(--border)',
+              gap: 6,
+            }}>
+              <input
+                type="text"
+                placeholder={`Ask anything about ${stock.ticker}…`}
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAsk() }}
+                style={{
+                  flex: 1, background: 'transparent',
+                  border: 'none', outline: 'none',
+                  fontSize: 13, color: 'var(--text-primary)',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                onClick={handleAsk}
+                disabled={!question.trim() || askLoading}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', border: 'none',
+                  background: question.trim() && !askLoading ? 'var(--accent-purple)' : 'var(--bg-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: question.trim() && !askLoading ? 'pointer' : 'default',
+                  transition: 'background 0.18s',
+                  flexShrink: 0,
+                }}
+              >
+                <ArrowUp size={14} color={question.trim() && !askLoading ? '#fff' : 'var(--text-tertiary)'} />
+              </button>
+            </div>
+          </div>
+
           {/* ── IN THE NEWS ── */}
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -618,66 +678,6 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
                 No recent news found.
               </div>
             )}
-          </div>
-
-          {/* ── Ask Claude bar ── */}
-          <div style={{ marginTop: 16 }} onClick={e => e.stopPropagation()}>
-            {/* Answer bubble */}
-            {(answer || askLoading) && (
-              <div style={{
-                background: 'var(--accent-purple-dim)',
-                border: '1px solid rgba(139,92,246,0.2)',
-                borderRadius: 14,
-                padding: '10px 12px',
-                marginBottom: 8,
-                fontSize: 13,
-                color: 'var(--text-primary)',
-                lineHeight: 1.55,
-                minHeight: 40,
-              }}>
-                {askLoading
-                  ? <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.1, repeat: Infinity }}>Thinking…</motion.span>
-                  : answer}
-              </div>
-            )}
-
-            {/* iOS-style input */}
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              background: 'var(--bg-surface)',
-              borderRadius: 22,
-              padding: '6px 6px 6px 14px',
-              border: '1px solid var(--border)',
-              gap: 6,
-            }}>
-              <input
-                type="text"
-                placeholder={`Ask anything about ${stock.ticker}…`}
-                value={question}
-                onChange={e => setQuestion(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAsk() }}
-                style={{
-                  flex: 1, background: 'transparent',
-                  border: 'none', outline: 'none',
-                  fontSize: 13, color: 'var(--text-primary)',
-                  fontFamily: 'inherit',
-                }}
-              />
-              <button
-                onClick={handleAsk}
-                disabled={!question.trim() || askLoading}
-                style={{
-                  width: 28, height: 28, borderRadius: '50%', border: 'none',
-                  background: question.trim() && !askLoading ? 'var(--accent-purple)' : 'var(--bg-primary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: question.trim() && !askLoading ? 'pointer' : 'default',
-                  transition: 'background 0.18s',
-                  flexShrink: 0,
-                }}
-              >
-                <ArrowUp size={14} color={question.trim() && !askLoading ? '#fff' : 'var(--text-tertiary)'} />
-              </button>
-            </div>
           </div>
 
           <div style={{
