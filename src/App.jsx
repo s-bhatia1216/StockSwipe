@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import SwipeView from './components/SwipeView'
 import PortfolioView from './components/PortfolioView'
 import ReelsView from './components/ReelsView'
+import InsightsView from './components/InsightsView'
 import StockDetailModal from './components/StockDetailModal'
 import SectorPicker from './components/SectorPicker'
 import { Compass, Briefcase, Clapperboard, Sparkles } from 'lucide-react'
@@ -133,7 +134,7 @@ export default function App() {
             letterSpacing: '-0.02em',
             color: 'var(--text-primary)',
           }}>
-            {view === 'discover' ? 'Discover' : view === 'reels' ? 'Reels' : 'Portfolio'}
+            {view === 'discover' ? 'Discover' : view === 'reels' ? 'Reels' : view === 'insights' ? 'AI Insights' : 'Portfolio'}
           </h1>
           <p style={{
             fontSize: 13,
@@ -145,6 +146,8 @@ export default function App() {
               ? `${remaining.length} stocks remaining`
               : view === 'reels'
               ? 'stock shorts'
+              : view === 'insights'
+              ? `${holdings.length} holdings analyzed`
               : `${holdings.length} holdings`
             }
           </p>
@@ -271,6 +274,16 @@ export default function App() {
             >
               <ReelsView stocks={sectorFiltered} onChipClick={(ticker) => setDetailModal({ ticker, mode: 'buy' })} />
             </motion.div>
+          ) : view === 'insights' ? (
+            <motion.div
+              key="insights"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{ width: '100%', height: '100%' }}
+            >
+              <InsightsView holdings={holdings} />
+            </motion.div>
           ) : (
             <PortfolioView
               key="portfolio"
@@ -325,7 +338,7 @@ export default function App() {
         ].map(({ id, icon: Icon, label }) => (
           <button
             key={id}
-            onClick={() => id !== 'insights' && setView(id)}
+            onClick={() => setView(id)}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -334,7 +347,6 @@ export default function App() {
               background: 'none',
               color: view === id ? 'var(--text-primary)' : 'var(--text-tertiary)',
               transition: 'color 0.2s',
-              opacity: id === 'insights' ? 0.4 : 1,
             }}
           >
             <Icon size={20} strokeWidth={view === id ? 2 : 1.5} />

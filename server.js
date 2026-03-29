@@ -1,9 +1,13 @@
 import 'dotenv/config'
 import express from 'express'
 import YahooFinance from 'yahoo-finance2'
+import Anthropic from '@anthropic-ai/sdk'
 
 const app = express()
+app.use(express.json())
+
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // ── In-memory cache ──────────────────────────────────────────────────────────
 // TTL varies by range: intraday data expires fast, weekly/monthly data can be cached longer
@@ -181,6 +185,78 @@ app.get('/api/news-insights/:ticker', async (req, res) => {
     res.json({ articles: articles.slice(0, 4) })
   } catch (err) {
     console.error(`[news] ${ticker}:`, err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── POST /api/insights ───────────────────────────────────────────────────────
+app.post('/api/insights', async (req, res) => {
+  const { holdings = [], availableStocks = [] } = req.body
+
+  if (holdings.length === 0) {
+    return res.status(400).json({ error: 'No holdings to analyze' })
+  }
+
+  try {
+    const totalInvested = holdings.reduce((s, h) => s + h.amount, 0)
+
+    // Sector concentration
+    const sectorTotals = {}
+    holdings.forEach(h => {
+      sectorTotals[h.sector] = (sectorTotals[h.sector] || 0) + h.amount
+    })
+    const sectorBreakdown = Object.entries(sectorTotals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([s, a]) => `${s}: ${((a / totalInvested) * 100).toFixed(0)}%`)
+      .join(', ')
+
+    const holdingLines = holdings
+      .map(h => `  - ${h.ticker} (${h.name}, ${h.sector}): $${h.amount.toFixed(2)} invested`)
+      .join('\n')
+
+    const availableLines = availableStocks
+      .slice(0, 12)
+      .map(s => `${s.ticker} (${s.name}, ${s.sector})`)
+      .join(', ')
+
+    const prompt = `You are a concise AI investment advisor for a mobile investing app. Analyze this portfolio and respond with ONLY valid JSON — no markdown fences, no explanation, just the raw JSON object.
+
+PORTFOLIO — total invested: $${totalInvested.toFixed(2)}
+${holdingLines}
+
+SECTOR BREAKDOWN: ${sectorBreakdown}
+
+STOCKS AVAILABLE (not yet in portfolio): ${availableLines}
+
+Return exactly this JSON shape:
+{
+  "grade": "B+",
+  "headline": "4-6 word punchy portfolio description",
+  "summary": "2 honest sentences assessing the overall portfolio quality and risk profile.",
+  "strengths": ["short strength phrase", "short strength phrase"],
+  "risks": ["short risk phrase", "short risk phrase", "short risk phrase"],
+  "recommendations": [
+    { "ticker": "XXXX", "reason": "One sentence on why this stock balances or improves the portfolio." },
+    { "ticker": "XXXX", "reason": "One sentence on why this stock balances or improves the portfolio." },
+    { "ticker": "XXXX", "reason": "One sentence on why this stock balances or improves the portfolio." }
+  ]
+}
+
+Grade scale: A = excellent diversification + risk/reward, B = solid with minor gaps, C = concentrated or high risk, D = poorly constructed. Use +/- modifiers.`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    let raw = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+    // Strip markdown fences if Claude wraps the JSON anyway
+    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const json = JSON.parse(raw)
+    res.json(json)
+  } catch (err) {
+    console.error('[insights]', err.message)
     res.status(500).json({ error: err.message })
   }
 })
