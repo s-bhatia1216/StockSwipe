@@ -103,6 +103,7 @@
 
 - **Anthropic API**: `claude-haiku-4-5-20251001` for speed-sensitive calls (hook, ask). `claude-sonnet-4-6` for portfolio analysis.
 - **Market data**: `yahoo-finance2` v3 (`new YahooFinance()`). Use `meta.chartPreviousClose` not `chartData[0]` as period baseline. 1D needs `daysBack: 4` for weekends.
+- **YouTube API**: `YOUTUBE_API_KEY` — YouTube Data API v3 (Google Cloud Console). Used in Reels.
 - **Backend**: Express on port 3001, proxied via Vite. Run both with `npm run dev`.
 - **Trade[XYZ]**: Mock with a realistic confirmation modal if no public API — judges care about the vision.
 - **State**: React useState throughout. All user state persisted to localStorage.

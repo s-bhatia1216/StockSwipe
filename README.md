@@ -20,6 +20,7 @@ npm run dev
 |-----|-------|
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
 | `FINNHUB_API_KEY` | [finnhub.io](https://finnhub.io) — free tier |
+| `YOUTUBE_API_KEY` | [console.cloud.google.com](https://console.cloud.google.com) — YouTube Data API v3 |
 
 ## Features
 
@@ -64,6 +65,7 @@ npm run dev
 | Backend | Express (Node.js) |
 | Market data | yahoo-finance2 |
 | News | Finnhub API |
+| Video | YouTube Data API v3 |
 | AI | Anthropic SDK — Claude Haiku 4.5 + Sonnet 4.6 |
 
 ## Project structure
