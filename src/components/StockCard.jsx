@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform } from 'framer-motion'
 import { TrendingUp, TrendingDown, RotateCcw } from 'lucide-react'
 import MiniChart from './MiniChart'
 import { useStockData, RANGES } from '../hooks/useStockData'
+import { useNewsInsights } from '../hooks/useNewsInsights'
 
 function formatHoverTime(unix, rangeKey) {
   if (!unix) return ''
@@ -32,6 +33,7 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
   const scale = useTransform(x, [-300, 0, 300], [0.95, 1, 0.95])
 
   const { price, change, changePct, chartData, timestamps, loading } = useStockData(stock.ticker, selectedRange, stock.price)
+  const { articles, loading: newsLoading, error: newsError } = useNewsInsights(stock.ticker, flipped)
 
   // Fall back to static data while loading or on error
   const livePrice     = price     ?? stock.price
@@ -455,6 +457,143 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-red)', marginBottom: 4 }}>BEAR CASE</div>
               <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{stock.bear}</div>
             </div>
+          </div>
+
+          {/* ── IN THE NEWS ── */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: '#f59e0b', flexShrink: 0,
+                boxShadow: '0 0 0 3px rgba(245,158,11,0.2)',
+              }} />
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
+                color: '#f59e0b', textTransform: 'uppercase',
+              }}>In the News</span>
+            </div>
+
+            {/* Skeleton */}
+            {newsLoading && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[0, 1, 2, 3].map(n => (
+                  <div key={n} style={{
+                    aspectRatio: '1 / 1', borderRadius: 14,
+                    background: 'var(--bg-surface)', opacity: 0.5,
+                  }} />
+                ))}
+              </div>
+            )}
+
+            {newsError && !newsLoading && (
+              <div style={{
+                fontSize: 12, color: 'var(--text-tertiary)',
+                background: 'var(--bg-surface)', borderRadius: 12, padding: '12px 14px',
+              }}>
+                Could not load news right now.
+              </div>
+            )}
+
+            {/* 2×2 grid */}
+            {!newsLoading && articles.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {articles.map((a, i) => {
+                  const minsAgo = Math.floor((Date.now() / 1000 - a.datetime) / 60)
+                  const timeLabel = minsAgo < 60
+                    ? `${minsAgo}m ago`
+                    : minsAgo < 1440
+                      ? `${Math.floor(minsAgo / 60)}h ago`
+                      : `${Math.floor(minsAgo / 1440)}d ago`
+
+                  return (
+                    <a
+                      key={i}
+                      href={a.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        aspectRatio: '1 / 1',
+                        borderRadius: 14,
+                        overflow: 'hidden',
+                        position: 'relative',
+                        display: 'block',
+                        textDecoration: 'none',
+                        background: `${stock.color}22`,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {/* Cover image */}
+                      {a.image && (
+                        <img
+                          src={a.image}
+                          alt=""
+                          style={{
+                            position: 'absolute', inset: 0,
+                            width: '100%', height: '100%',
+                            objectFit: 'cover',
+                          }}
+                          onError={e => { e.currentTarget.style.display = 'none' }}
+                        />
+                      )}
+
+                      {/* Fallback logo (no image) */}
+                      {!a.image && (
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 28, fontWeight: 700,
+                          color: stock.color, fontFamily: 'var(--font-mono)',
+                        }}>
+                          {stock.logo}
+                        </div>
+                      )}
+
+                      {/* Gradient overlay */}
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.75) 100%)',
+                      }} />
+
+                      {/* Text content */}
+                      <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0,
+                        padding: '8px 9px',
+                      }}>
+                        <div style={{
+                          fontSize: 9, fontWeight: 600, letterSpacing: '0.04em',
+                          color: 'rgba(255,255,255,0.6)',
+                          textTransform: 'uppercase',
+                          marginBottom: 3,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {a.source} · {timeLabel}
+                        </div>
+                        <p style={{
+                          fontSize: 11, fontWeight: 600,
+                          color: '#fff', lineHeight: 1.35, margin: 0,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}>
+                          {a.headline}
+                        </p>
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+
+            {!newsLoading && !newsError && articles.length === 0 && (
+              <div style={{
+                fontSize: 12, color: 'var(--text-tertiary)',
+                background: 'var(--bg-surface)', borderRadius: 12, padding: '12px 14px',
+              }}>
+                No recent news found.
+              </div>
+            )}
           </div>
 
           <div style={{
