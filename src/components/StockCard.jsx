@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, useMotionValue, useTransform } from 'framer-motion'
-import { TrendingUp, TrendingDown, RotateCcw } from 'lucide-react'
+import { TrendingUp, TrendingDown, RotateCcw, ArrowUp } from 'lucide-react'
 import MiniChart from './MiniChart'
 import { useStockData, RANGES } from '../hooks/useStockData'
 import { useNewsInsights } from '../hooks/useNewsInsights'
@@ -25,6 +25,30 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
   const [flipped, setFlipped] = useState(false)
   const [selectedRange, setSelectedRange] = useState('1D')
   const [hoverInfo, setHoverInfo] = useState(null) // { price, timestamp } | null
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState(null)
+  const [askLoading, setAskLoading] = useState(false)
+
+  const handleAsk = async () => {
+    const q = question.trim()
+    if (!q || askLoading) return
+    setQuestion('')
+    setAskLoading(true)
+    setAnswer(null)
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: stock.ticker, name: stock.name, question: q, summary: stock.summary, bull: stock.bull, bear: stock.bear }),
+      })
+      const data = await res.json()
+      setAnswer(data.answer ?? 'No answer returned.')
+    } catch {
+      setAnswer('Could not reach the server.')
+    } finally {
+      setAskLoading(false)
+    }
+  }
 
   const x = useMotionValue(0)
   const rotate = useTransform(x, [-300, 0, 300], [-15, 0, 15])
@@ -596,6 +620,66 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
             )}
           </div>
 
+          {/* ── Ask Claude bar ── */}
+          <div style={{ marginTop: 16 }} onClick={e => e.stopPropagation()}>
+            {/* Answer bubble */}
+            {(answer || askLoading) && (
+              <div style={{
+                background: 'var(--accent-purple-dim)',
+                border: '1px solid rgba(139,92,246,0.2)',
+                borderRadius: 14,
+                padding: '10px 12px',
+                marginBottom: 8,
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                lineHeight: 1.55,
+                minHeight: 40,
+              }}>
+                {askLoading
+                  ? <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.1, repeat: Infinity }}>Thinking…</motion.span>
+                  : answer}
+              </div>
+            )}
+
+            {/* iOS-style input */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--bg-surface)',
+              borderRadius: 22,
+              padding: '6px 6px 6px 14px',
+              border: '1px solid var(--border)',
+              gap: 6,
+            }}>
+              <input
+                type="text"
+                placeholder={`Ask anything about ${stock.ticker}…`}
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAsk() }}
+                style={{
+                  flex: 1, background: 'transparent',
+                  border: 'none', outline: 'none',
+                  fontSize: 13, color: 'var(--text-primary)',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <button
+                onClick={handleAsk}
+                disabled={!question.trim() || askLoading}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', border: 'none',
+                  background: question.trim() && !askLoading ? 'var(--accent-purple)' : 'var(--bg-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: question.trim() && !askLoading ? 'pointer' : 'default',
+                  transition: 'background 0.18s',
+                  flexShrink: 0,
+                }}
+              >
+                <ArrowUp size={14} color={question.trim() && !askLoading ? '#fff' : 'var(--text-tertiary)'} />
+              </button>
+            </div>
+          </div>
+
           <div style={{
             textAlign: 'center',
             fontSize: 12,
@@ -604,8 +688,8 @@ export default function StockCard({ stock, onSwipeRight, onSwipeLeft, onSwipeDow
             alignItems: 'center',
             justifyContent: 'center',
             gap: 6,
-            marginTop: 'auto',
-            paddingTop: 8,
+            marginTop: 12,
+            paddingTop: 4,
           }}>
             <RotateCcw size={12} />
             Tap to flip back

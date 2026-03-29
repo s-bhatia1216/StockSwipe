@@ -230,6 +230,35 @@ Return ONLY the hook text, nothing else.`,
   }
 })
 
+// ── POST /api/ask ────────────────────────────────────────────────────────────
+app.post('/api/ask', async (req, res) => {
+  const { ticker, name, question, summary, bull, bear } = req.body
+  if (!ticker || !question) return res.status(400).json({ error: 'Missing ticker or question' })
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 160,
+      messages: [{
+        role: 'user',
+        content: `You are a concise stock analyst. Answer this question about ${ticker} (${name}) in 1-3 plain-English sentences. No jargon, no bullet points, just a direct answer.
+
+Context — Summary: ${summary} | Bull: ${bull} | Bear: ${bear}
+
+Question: ${question}`,
+      }],
+    })
+
+    const answer = message.content[0].type === 'text'
+      ? message.content[0].text.trim()
+      : 'Could not generate an answer.'
+    res.json({ answer })
+  } catch (err) {
+    console.error(`[ask] ${ticker}:`, err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // ── POST /api/insights ───────────────────────────────────────────────────────
 app.post('/api/insights', async (req, res) => {
   const { holdings = [], availableStocks = [] } = req.body
