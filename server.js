@@ -2,6 +2,11 @@ import 'dotenv/config'
 import express from 'express'
 import YahooFinance from 'yahoo-finance2'
 import Anthropic from '@anthropic-ai/sdk'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+import { existsSync } from 'fs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const app = express()
 app.use(express.json())
@@ -384,6 +389,13 @@ Grade scale: A = excellent diversification + risk/reward, B = solid with minor g
     res.json(buildMock())
   }
 })
+
+// Serve built frontend in production
+const distPath = join(__dirname, 'dist')
+if (existsSync(distPath)) {
+  app.use(express.static(distPath))
+  app.get('*', (req, res) => res.sendFile(join(distPath, 'index.html')))
+}
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`API server running on http://localhost:${PORT}`))

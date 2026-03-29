@@ -8,6 +8,7 @@
     "dev:host": "concurrently \"vite --host\" \"node server.js\"",
     "server": "node server.js",
     "build": "vite build",
+    "start": "node server.js",
     "preview": "vite preview"
   },
   "dependencies": {
