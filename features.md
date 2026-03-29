@@ -37,6 +37,7 @@
 | **AI Insights tab** | Claude Sonnet analyzes holdings → letter grade, headline, 2-sentence summary, sector allocation bars, strengths/risks, 3 Claude-recommended stocks with reasons | `/api/insights` POST |
 | **"Why this stock?" hook** | Claude Haiku generates a ≤10-word punchy hook above each card. Skeleton loading, 20-min server cache, module-level client cache. | `/api/hook/:ticker` |
 | **Trade confirmation animation** | After buy/sell, action panel shows spring-animated checkmark + "Invested $X.XX" / "Sold $X.XX" + share count. Auto-closes after 2s. | StockDetailModal |
+| **Ask Claude bar** | iOS-style rounded input at the bottom of the card back. User types any question about the stock; Claude Haiku answers in 1–3 plain-English sentences in a purple bubble. | `POST /api/ask` |
 
 ---
 
@@ -77,6 +78,10 @@
 
 ### Yash
 - Trade[XYZ] mock/integration
+- Friends feed / leaderboard
+- Stock debates (bull vs bear comments)
+- Diversification donut chart
+- Streaks + badges
 - Risk radar (if time)
 - Social leaderboard (if time)
 
@@ -96,7 +101,7 @@
 
 ## Technical notes
 
-- **Anthropic API**: `claude-haiku-4-5-20251001` for speed-sensitive calls. `claude-sonnet-4-6` for portfolio analysis.
+- **Anthropic API**: `claude-haiku-4-5-20251001` for speed-sensitive calls (hook, ask). `claude-sonnet-4-6` for portfolio analysis.
 - **Market data**: `yahoo-finance2` v3 (`new YahooFinance()`). Use `meta.chartPreviousClose` not `chartData[0]` as period baseline. 1D needs `daysBack: 4` for weekends.
 - **Backend**: Express on port 3001, proxied via Vite. Run both with `npm run dev`.
 - **Trade[XYZ]**: Mock with a realistic confirmation modal if no public API — judges care about the vision.

@@ -29,6 +29,7 @@ npm run dev
 - Real-time prices and charts via Yahoo Finance (`yahoo-finance2`), correct % change per range
 - 2×2 live news widget grid on card back — real article cover images scraped from og:image tags
 - "Why this stock?" hook — Claude Haiku generates a ≤10-word punchy insight above each card (cached)
+- Ask Claude bar — iOS-style input on card back, ask any question, Claude Haiku answers in a purple bubble
 - Community comments bottom sheet with threaded replies, likes, verified analyst badges
 - Floating comment bubbles drift up from the card during swiping
 - Sector picker onboarding — filter the deck to your interests
@@ -63,7 +64,7 @@ npm run dev
 | Backend | Express (Node.js) |
 | Market data | yahoo-finance2 |
 | News | Finnhub API |
-| AI | Anthropic SDK — Claude Sonnet 4.6 |
+| AI | Anthropic SDK — Claude Haiku 4.5 + Sonnet 4.6 |
 
 ## Project structure
 
@@ -72,7 +73,8 @@ server.js                   # Express backend
   GET  /api/stock/:ticker/:range   — live price + chart (yahoo-finance2, cached)
   GET  /api/news-insights/:ticker  — real news articles with og:image scraping
   GET  /api/hook/:ticker           — Claude Haiku "why this stock?" hook (20-min cache)
-  POST /api/insights               — Claude portfolio analysis
+  POST /api/ask                    — Claude Haiku answers user questions about a stock
+  POST /api/insights               — Claude Sonnet portfolio analysis (grade, risks, recommendations)
 
 src/
   App.jsx                     # Main app, nav, global state + localStorage persistence
